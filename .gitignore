@@ -1,0 +1,34 @@
+# API Keys and sensitive configuration
+.env
+*.env
+
+# Xcode build outputs & dependencies
+build/
+DerivedData/
+.swiftpm/
+.build/
+
+# User-specific Xcode settings
+*.xcuserstate
+xcuserdata/
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+
+# OS-specific temporary files
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# Python temporary caches & virtual environments
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+env/
+venv/
+
+# Scratch files & local logs
+*.log
+scratch/
