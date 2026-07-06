@@ -5,6 +5,7 @@ struct DashboardView: View {
     @State private var familiarCount: Int = 0
     @State private var unfamiliarCount: Int = 0
     @State private var hardCount: Int = 0
+    @State private var distribution: ScheduleDistribution = ScheduleDistribution(todayOrOverdue: 0, within3Days: 0, within7Days: 0, within30Days: 0, over30Days: 0)
     
     @State private var showQuizSession = false
     @State private var showAddWord = false
@@ -123,6 +124,36 @@ struct DashboardView: View {
                         }
                         .padding(.horizontal)
                         
+                        // Spaced Repetition Distribution Panel
+                        VStack(spacing: 16) {
+                            HStack {
+                                Image(systemName: "chart.bar.xaxis")
+                                    .foregroundColor(Color(hex: "818CF8"))
+                                Text("에빙하우스 복습 예정 분포")
+                                    .font(.headline)
+                                    .foregroundColor(.white)
+                                Spacer()
+                            }
+                            
+                            let maxVal = max(1, max(distribution.todayOrOverdue, max(distribution.within3Days, max(distribution.within7Days, max(distribution.within30Days, distribution.over30Days)))))
+                            
+                            VStack(spacing: 12) {
+                                scheduleRow(title: "오늘/미룬 복습", count: distribution.todayOrOverdue, maxVal: maxVal, color: Color(hex: "F87171"))
+                                scheduleRow(title: "3일 이내 복습", count: distribution.within3Days, maxVal: maxVal, color: Color(hex: "D946EF"))
+                                scheduleRow(title: "7일 이내 복습", count: distribution.within7Days, maxVal: maxVal, color: Color(hex: "60A5FA"))
+                                scheduleRow(title: "30일 이내 복습", count: distribution.within30Days, maxVal: maxVal, color: Color(hex: "34D399"))
+                                scheduleRow(title: "안정기 (30일 초과)", count: distribution.over30Days, maxVal: maxVal, color: Color.white.opacity(0.4))
+                            }
+                        }
+                        .padding(20)
+                        .background(Color.white.opacity(0.03))
+                        .cornerRadius(24)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 24)
+                                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                        )
+                        .padding(.horizontal)
+                        
                         // Action Buttons
                         VStack(spacing: 16) {
                             // Primary Start Button
@@ -231,6 +262,36 @@ struct DashboardView: View {
         self.familiarCount = stats.familiar
         self.unfamiliarCount = stats.unfamiliar
         self.hardCount = stats.hard
+        
+        self.distribution = DatabaseManager.shared.fetchScheduleDistribution()
+    }
+    
+    private func scheduleRow(title: String, count: Int, maxVal: Int, color: Color) -> some View {
+        VStack(spacing: 4) {
+            HStack {
+                Text(title)
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                Spacer()
+                Text("\(count)개")
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundColor(.white)
+            }
+            
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color.white.opacity(0.05))
+                        .frame(height: 6)
+                    
+                    Capsule()
+                        .fill(color)
+                        .frame(width: geo.size.width * CGFloat(Double(count) / Double(maxVal)), height: 6)
+                }
+            }
+            .frame(height: 6)
+        }
     }
 }
 

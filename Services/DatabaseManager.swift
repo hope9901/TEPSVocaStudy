@@ -3,6 +3,14 @@ struct Distractor: Hashable {
     let meaning: String
 }
 
+struct ScheduleDistribution {
+    let todayOrOverdue: Int
+    let within3Days: Int
+    let within7Days: Int
+    let within30Days: Int
+    let over30Days: Int
+}
+
 class DatabaseManager {
     static let shared = DatabaseManager()
     private var db: OpaquePointer?
@@ -490,5 +498,50 @@ class DatabaseManager {
             }
         }
         sqlite3_finalize(stmt)
+    }
+    
+    /// Fetches the spaced repetition review schedule distribution count for the dashboard visualization.
+    func fetchScheduleDistribution() -> ScheduleDistribution {
+        var todayOrOverdue = 0
+        var within3Days = 0
+        var within7Days = 0
+        var within30Days = 0
+        var over30Days = 0
+        
+        guard let db = db else {
+            return ScheduleDistribution(todayOrOverdue: 0, within3Days: 0, within7Days: 0, within30Days: 0, over30Days: 0)
+        }
+        
+        let query = """
+            SELECT 
+                SUM(CASE WHEN datetime(scheduledAt) <= datetime('now') THEN 1 ELSE 0 END),
+                SUM(CASE WHEN datetime(scheduledAt) > datetime('now') AND datetime(scheduledAt) <= datetime('now', '+3 days') THEN 1 ELSE 0 END),
+                SUM(CASE WHEN datetime(scheduledAt) > datetime('now', '+3 days') AND datetime(scheduledAt) <= datetime('now', '+7 days') THEN 1 ELSE 0 END),
+                SUM(CASE WHEN datetime(scheduledAt) > datetime('now', '+7 days') AND datetime(scheduledAt) <= datetime('now', '+30 days') THEN 1 ELSE 0 END),
+                SUM(CASE WHEN datetime(scheduledAt) > datetime('now', '+30 days') THEN 1 ELSE 0 END)
+            FROM Corpus 
+            WHERE vocabularyId = ? AND isDeleted = 0;
+        """
+        
+        var stmt: OpaquePointer?
+        if sqlite3_prepare_v2(db, query, -1, &stmt, nil) == SQLITE_OK {
+            sqlite3_bind_text(stmt, 1, unifiedVocabId.cString(using: .utf8), -1, nil)
+            if sqlite3_step(stmt) == SQLITE_ROW {
+                todayOrOverdue = Int(sqlite3_column_int(stmt, 0))
+                within3Days = Int(sqlite3_column_int(stmt, 1))
+                within7Days = Int(sqlite3_column_int(stmt, 2))
+                within30Days = Int(sqlite3_column_int(stmt, 3))
+                over30Days = Int(sqlite3_column_int(stmt, 4))
+            }
+        }
+        sqlite3_finalize(stmt)
+        
+        return ScheduleDistribution(
+            todayOrOverdue: todayOrOverdue,
+            within3Days: within3Days,
+            within7Days: within7Days,
+            within30Days: within30Days,
+            over30Days: over30Days
+        )
     }
 }

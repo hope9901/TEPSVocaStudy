@@ -23,7 +23,11 @@ class QuizSessionViewModel: ObservableObject {
     // MARK: - Published Properties
     @Published var phase: SessionPhase = .mainQuiz
     @Published var currentWords: [Corpus] = []
-    @Published var currentIndex: Int = 0
+    @Published var currentIndex: Int = 0 {
+        didSet {
+            self.hintCount = 0
+        }
+    }
     @Published var incorrectWords: [Corpus] = []
     
     // Quiz specific properties
@@ -36,6 +40,7 @@ class QuizSessionViewModel: ObservableObject {
     @Published var typingInput: String = ""
     @Published var isTypingSuccess: Bool = false
     @Published var typingMode: TypingMode = .copyMode
+    @Published var hintCount: Int = 0
     
     // Session state
     @Published var isHardWordsSession: Bool = false
@@ -55,6 +60,28 @@ class QuizSessionViewModel: ObservableObject {
         guard phase == .typingReview else { return nil }
         guard currentIndex >= 0 && currentIndex < incorrectWords.count else { return nil }
         return incorrectWords[currentIndex]
+    }
+    
+    // Spaced out hint string based on hintCount
+    var typingHintString: String {
+        guard let word = currentTypingWord?.word else { return "" }
+        if hintCount == 0 {
+            return String(repeating: "_ ", count: word.count).trimmingCharacters(in: .whitespaces)
+        } else if hintCount == 1 {
+            let firstChar = String(word.prefix(1))
+            let underscores = String(repeating: "_ ", count: max(0, word.count - 1)).trimmingCharacters(in: .whitespaces)
+            return "\(firstChar) \(underscores)"
+        } else if hintCount == 2 {
+            let firstTwo = word.prefix(2)
+            var result = ""
+            for char in firstTwo {
+                result += "\(char) "
+            }
+            let underscores = String(repeating: "_ ", count: max(0, word.count - 2)).trimmingCharacters(in: .whitespaces)
+            return "\(result)\(underscores)"
+        } else {
+            return word.map { String($0) }.joined(separator: " ")
+        }
     }
     
     // MARK: - Session Controls
@@ -147,6 +174,13 @@ class QuizSessionViewModel: ObservableObject {
     }
     
     // MARK: - Typing Practice Logic
+    
+    /// Triggers progressive typing hints
+    func triggerHint() {
+        if hintCount < 3 {
+            hintCount += 1
+        }
+    }
     
     /// Handles user text input for copying/typing vocabulary spelling.
     /// Check is case-insensitive and trims whitespaces.

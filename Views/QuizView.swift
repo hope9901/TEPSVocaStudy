@@ -132,6 +132,8 @@ struct OptionButton: View {
         Button(action: {
             if !isAnswered {
                 action()
+            } else {
+                AudioSynthesizer.shared.speak(text: option.word)
             }
         }) {
             HStack {

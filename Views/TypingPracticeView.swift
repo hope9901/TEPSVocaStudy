@@ -53,32 +53,54 @@ struct TypingPracticeView: View {
                             .tracking(1.5)
                             .multilineTextAlignment(.center)
                     } else {
-                        // Hides spelling, provides larger replay voice button
-                        VStack(spacing: 12) {
-                            Text(String(repeating: "_ ", count: target.word.count))
+                        // Hides spelling, provides progressive hints & voice button
+                        VStack(spacing: 14) {
+                            Text(viewModel.typingHintString)
                                 .font(.system(size: 32, weight: .bold, design: .monospaced))
                                 .foregroundColor(Color(hex: "D946EF"))
                                 .multilineTextAlignment(.center)
                                 .padding(.bottom, 4)
                             
-                            Button(action: {
-                                AudioSynthesizer.shared.speak(text: target.word)
-                            }) {
-                                HStack(spacing: 6) {
-                                    Image(systemName: "speaker.wave.3.fill")
-                                    Text("발음 다시 듣기")
-                                        .fontWeight(.bold)
+                            HStack(spacing: 12) {
+                                Button(action: {
+                                    AudioSynthesizer.shared.speak(text: target.word)
+                                }) {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "speaker.wave.3.fill")
+                                        Text("다시 듣기")
+                                            .fontWeight(.bold)
+                                    }
+                                    .font(.subheadline)
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 8)
+                                    .background(Color(hex: "D946EF").opacity(0.15))
+                                    .cornerRadius(20)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 20)
+                                            .stroke(Color(hex: "D946EF").opacity(0.4), lineWidth: 1)
+                                    )
                                 }
-                                .font(.subheadline)
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 8)
-                                .background(Color(hex: "D946EF").opacity(0.15))
-                                .cornerRadius(20)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 20)
-                                        .stroke(Color(hex: "D946EF").opacity(0.4), lineWidth: 1)
-                                )
+                                
+                                Button(action: {
+                                    viewModel.triggerHint()
+                                }) {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "lightbulb.fill")
+                                        Text(viewModel.hintCount == 0 ? "힌트" : "힌트 (\(viewModel.hintCount)/3)")
+                                            .fontWeight(.bold)
+                                    }
+                                    .font(.subheadline)
+                                    .foregroundColor(viewModel.hintCount > 0 ? Color.yellow : .white)
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 8)
+                                    .background(Color.yellow.opacity(viewModel.hintCount > 0 ? 0.25 : 0.12))
+                                    .cornerRadius(20)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 20)
+                                            .stroke(viewModel.hintCount > 0 ? Color.yellow.opacity(0.6) : Color.white.opacity(0.15), lineWidth: 1)
+                                    )
+                                }
                             }
                         }
                     }
