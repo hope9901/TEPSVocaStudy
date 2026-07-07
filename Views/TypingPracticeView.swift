@@ -106,10 +106,10 @@ struct TypingPracticeView: View {
                         .font(.subheadline)
                         .italic()
                         .foregroundColor(.gray)
-                        .minimumScaleFactor(0.8)
                         .lineLimit(nil) // Allows unlimited lines so sentences never truncate
                         .multilineTextAlignment(.center)
                         .lineSpacing(4)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
