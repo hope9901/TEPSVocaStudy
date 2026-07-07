@@ -1,0 +1,390 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		01C48332DFCDDDB100266F5F /* QuizSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44435F655FBF45DCB5BBF570 /* QuizSessionView.swift */; };
+		11226E1E0B123635A0A7DF11 /* AudioSynthesizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D194E61A82D55883CE90EA6 /* AudioSynthesizer.swift */; };
+		363DD6909CC98712F6335A44 /* QuizSessionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE32BF076A1B9CA6808032D9 /* QuizSessionViewModel.swift */; };
+		544E18615B10BFA3594C5C61 /* QuizView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62528FAAA4B427CB8D21C305 /* QuizView.swift */; };
+		61BD70AD13DBE9739DB6271A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0F0875A37801E2680DF9BA8B /* Assets.xcassets */; };
+		778C4DC2719D917B7B55C1B3 /* v85_20260312T133124Z.db in Resources */ = {isa = PBXBuildFile; fileRef = 996E59E90920E08BBC937833 /* v85_20260312T133124Z.db */; };
+		9D3E08B6A2A3C5BC7A762F5A /* AddWordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73D845F18B9122BDE34948A6 /* AddWordView.swift */; };
+		BE39A64C11DADDF8B331B093 /* DatabaseManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9607EC060238B9FCA8E2FF47 /* DatabaseManager.swift */; };
+		C6FAC31C3BB884399418E541 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 376DCC8448A0E3F2B1CEEAE8 /* DashboardView.swift */; };
+		CD95328D3D820A9B63174D41 /* AddWordViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43F0589C4AC434EC04994AE7 /* AddWordViewModel.swift */; };
+		D26CB7E16BD18C11758DEAFC /* TypingPracticeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A17B7892117484D5A9EB327 /* TypingPracticeView.swift */; };
+		E0AC83471225B93F79A921D1 /* Corpus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 860157FE5037EB0C2E63A75E /* Corpus.swift */; };
+		EC119BF58D3E481842F42EE2 /* TEPSVocaStudyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A66A77F3D40F50DA1DAD8E0 /* TEPSVocaStudyApp.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		0F0875A37801E2680DF9BA8B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		376DCC8448A0E3F2B1CEEAE8 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
+		43F0589C4AC434EC04994AE7 /* AddWordViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddWordViewModel.swift; sourceTree = "<group>"; };
+		44435F655FBF45DCB5BBF570 /* QuizSessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuizSessionView.swift; sourceTree = "<group>"; };
+		5A66A77F3D40F50DA1DAD8E0 /* TEPSVocaStudyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TEPSVocaStudyApp.swift; sourceTree = "<group>"; };
+		62528FAAA4B427CB8D21C305 /* QuizView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuizView.swift; sourceTree = "<group>"; };
+		6A17B7892117484D5A9EB327 /* TypingPracticeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypingPracticeView.swift; sourceTree = "<group>"; };
+		73D845F18B9122BDE34948A6 /* AddWordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddWordView.swift; sourceTree = "<group>"; };
+		860157FE5037EB0C2E63A75E /* Corpus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Corpus.swift; sourceTree = "<group>"; };
+		8D194E61A82D55883CE90EA6 /* AudioSynthesizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioSynthesizer.swift; sourceTree = "<group>"; };
+		92980352CC2BBAFA4ED1EC84 /* TEPSVocaStudy.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TEPSVocaStudy.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		9607EC060238B9FCA8E2FF47 /* DatabaseManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabaseManager.swift; sourceTree = "<group>"; };
+		996E59E90920E08BBC937833 /* v85_20260312T133124Z.db */ = {isa = PBXFileReference; lastKnownFileType = file; path = v85_20260312T133124Z.db; sourceTree = "<group>"; };
+		AE32BF076A1B9CA6808032D9 /* QuizSessionViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuizSessionViewModel.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		4F527C503845C14B21BF1969 /* Database */ = {
+			isa = PBXGroup;
+			children = (
+				996E59E90920E08BBC937833 /* v85_20260312T133124Z.db */,
+			);
+			path = Database;
+			sourceTree = "<group>";
+		};
+		7436DE03D4E2CBE5D7C81E6C /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				8D194E61A82D55883CE90EA6 /* AudioSynthesizer.swift */,
+				9607EC060238B9FCA8E2FF47 /* DatabaseManager.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		78581C5DA7A594E0BB9EB57D /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				73D845F18B9122BDE34948A6 /* AddWordView.swift */,
+				376DCC8448A0E3F2B1CEEAE8 /* DashboardView.swift */,
+				44435F655FBF45DCB5BBF570 /* QuizSessionView.swift */,
+				62528FAAA4B427CB8D21C305 /* QuizView.swift */,
+				6A17B7892117484D5A9EB327 /* TypingPracticeView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		B6BEC24E36544AA48C1AACC9 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				92980352CC2BBAFA4ED1EC84 /* TEPSVocaStudy.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		E8AC68A958A94065F05A5218 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				860157FE5037EB0C2E63A75E /* Corpus.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		F3F56AF5FA716E0264A0E0B1 = {
+			isa = PBXGroup;
+			children = (
+				0F0875A37801E2680DF9BA8B /* Assets.xcassets */,
+				5A66A77F3D40F50DA1DAD8E0 /* TEPSVocaStudyApp.swift */,
+				4F527C503845C14B21BF1969 /* Database */,
+				E8AC68A958A94065F05A5218 /* Models */,
+				7436DE03D4E2CBE5D7C81E6C /* Services */,
+				FC078DF464C52937262A128D /* ViewModels */,
+				78581C5DA7A594E0BB9EB57D /* Views */,
+				B6BEC24E36544AA48C1AACC9 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		FC078DF464C52937262A128D /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+				43F0589C4AC434EC04994AE7 /* AddWordViewModel.swift */,
+				AE32BF076A1B9CA6808032D9 /* QuizSessionViewModel.swift */,
+			);
+			path = ViewModels;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		4EAF93F2B3B9AF779C4EAA8E /* TEPSVocaStudy */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 417B4FF0426AC1A9C71E505B /* Build configuration list for PBXNativeTarget "TEPSVocaStudy" */;
+			buildPhases = (
+				F48551C55B0DD764683D9EF6 /* Sources */,
+				58272DC5F6C592E3B44E9FFA /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = TEPSVocaStudy;
+			packageProductDependencies = (
+			);
+			productName = TEPSVocaStudy;
+			productReference = 92980352CC2BBAFA4ED1EC84 /* TEPSVocaStudy.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		59CA610DA725F0AC6DDEB9A4 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					4EAF93F2B3B9AF779C4EAA8E = {
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = CADD19BAC98E6E75BE53AE38 /* Build configuration list for PBXProject "TEPSVocaStudy" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = F3F56AF5FA716E0264A0E0B1;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = B6BEC24E36544AA48C1AACC9 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				4EAF93F2B3B9AF779C4EAA8E /* TEPSVocaStudy */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		58272DC5F6C592E3B44E9FFA /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				61BD70AD13DBE9739DB6271A /* Assets.xcassets in Resources */,
+				778C4DC2719D917B7B55C1B3 /* v85_20260312T133124Z.db in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		F48551C55B0DD764683D9EF6 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9D3E08B6A2A3C5BC7A762F5A /* AddWordView.swift in Sources */,
+				CD95328D3D820A9B63174D41 /* AddWordViewModel.swift in Sources */,
+				11226E1E0B123635A0A7DF11 /* AudioSynthesizer.swift in Sources */,
+				E0AC83471225B93F79A921D1 /* Corpus.swift in Sources */,
+				C6FAC31C3BB884399418E541 /* DashboardView.swift in Sources */,
+				BE39A64C11DADDF8B331B093 /* DatabaseManager.swift in Sources */,
+				01C48332DFCDDDB100266F5F /* QuizSessionView.swift in Sources */,
+				363DD6909CC98712F6335A44 /* QuizSessionViewModel.swift in Sources */,
+				544E18615B10BFA3594C5C61 /* QuizView.swift in Sources */,
+				EC119BF58D3E481842F42EE2 /* TEPSVocaStudyApp.swift in Sources */,
+				D26CB7E16BD18C11758DEAFC /* TypingPracticeView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		191239299F86023660404CEC /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 633B86GZAN;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "TEPS Voca";
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.hope9901.TEPSVocaStudy;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		1E58D5DBCDFA6D518DB35496 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		2F2FBB5AA3CB7EA3415FC602 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 633B86GZAN;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "TEPS Voca";
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.hope9901.TEPSVocaStudy;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		A900A54D2CBB3D7200C62E95 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		417B4FF0426AC1A9C71E505B /* Build configuration list for PBXNativeTarget "TEPSVocaStudy" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2F2FBB5AA3CB7EA3415FC602 /* Debug */,
+				191239299F86023660404CEC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		CADD19BAC98E6E75BE53AE38 /* Build configuration list for PBXProject "TEPSVocaStudy" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1E58D5DBCDFA6D518DB35496 /* Debug */,
+				A900A54D2CBB3D7200C62E95 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 59CA610DA725F0AC6DDEB9A4 /* Project object */;
+}
