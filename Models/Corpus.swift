@@ -28,3 +28,17 @@ struct Corpus: Identifiable, Hashable, Codable {
         return familiar <= -3
     }
 }
+
+// Meanings imported from multiple sources are joined with "﹒" and frequently
+// repeat the same translation (some run past 250 characters); keep only the
+// first few unique variants when displaying them.
+extension String {
+    func condensedMeaning(maxVariants: Int = 2) -> String {
+        var seen = Set<String>()
+        let unique = split(separator: "﹒")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty && seen.insert($0).inserted }
+        guard !unique.isEmpty else { return self }
+        return unique.prefix(maxVariants).joined(separator: "﹒")
+    }
+}

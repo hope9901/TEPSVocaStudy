@@ -78,7 +78,7 @@ struct TypingPracticeView: View {
             }
 
             // Korean Meaning
-            Text(target.meaning)
+            Text(target.meaning.condensedMeaning(maxVariants: 3))
                 .font(.title3)
                 .fontWeight(.semibold)
                 .foregroundColor(.white.opacity(0.85))

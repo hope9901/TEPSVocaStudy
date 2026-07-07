@@ -141,12 +141,12 @@ struct OptionButton: View {
         }) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(option.meaning)
+                    Text(option.meaning.condensedMeaning())
                         .font(.body)
                         .fontWeight(.medium)
                         .foregroundColor(textColor)
                         .multilineTextAlignment(.leading)
-                        .minimumScaleFactor(0.8)
+                        .fixedSize(horizontal: false, vertical: true)
                     
                     // Reveal the English spelling for the incorrect distractor meanings
                     if isAnswered && !isCorrect {
