@@ -2,7 +2,6 @@ import SwiftUI
 
 struct TypingPracticeView: View {
     @ObservedObject var viewModel: QuizSessionViewModel
-    @FocusState private var isTextFieldFocused: Bool
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -11,16 +10,10 @@ struct TypingPracticeView: View {
 
                 if let target = viewModel.currentTypingWord {
                     wordCard(target: target)
-                    typingInputArea
+                    TypingInputField(viewModel: viewModel)
                 }
             }
             .padding(.bottom, 24)
-        }
-        .onAppear {
-            // Auto focus keyboard on transition
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                self.isTextFieldFocused = true
-            }
         }
     }
 
@@ -188,42 +181,61 @@ struct TypingPracticeView: View {
         }
     }
 
-    // MARK: - Typing Input Area
-    private var typingInputArea: some View {
-        VStack(spacing: 12) {
-            ZStack(alignment: .trailing) {
-                TextField(viewModel.typingMode == .copyMode ? "여기에 영어 단어를 입력하세요" : "들리는 단어의 스펠링을 입력하세요", text: $viewModel.typingInput)
-                    .font(.system(size: 20, weight: .bold, design: .monospaced))
-                    .foregroundColor(.white)
-                    .multilineTextAlignment(.center)
-                    .frame(height: 56)
-                    .background(Color.white.opacity(0.04))
-                    .cornerRadius(16)
-                    .focused($isTextFieldFocused)
-                    .submitLabel(.done)
-                    .textInputAutocapitalization(.never)
-                    .disableAutocorrection(true)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(
-                                viewModel.isTypingSuccess ? Color(hex: "10B981") : Color.white.opacity(0.12),
-                                lineWidth: 1.5
-                            )
-                    )
-                    .onChange(of: viewModel.typingInput) { _ in
-                        viewModel.handleTypingInputChanged()
-                    }
+}
 
-                // Checkmark animation on success
-                if viewModel.isTypingSuccess {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(Color(hex: "10B981"))
-                        .font(.title3)
-                        .padding(.trailing, 18)
-                        .transition(.scale.combined(with: .opacity))
+// MARK: - Typing Input Field
+// Owns the input text as local @State so each keystroke re-renders only this
+// small view instead of publishing through the shared view model and redrawing
+// the whole session screen (header, progress bar, word card) — that full-screen
+// redraw per keystroke is what made typing lag.
+struct TypingInputField: View {
+    @ObservedObject var viewModel: QuizSessionViewModel
+    @State private var text = ""
+    @FocusState private var isTextFieldFocused: Bool
+
+    var body: some View {
+        ZStack(alignment: .trailing) {
+            TextField(viewModel.typingMode == .copyMode ? "여기에 영어 단어를 입력하세요" : "들리는 단어의 스펠링을 입력하세요", text: $text)
+                .font(.system(size: 20, weight: .bold, design: .monospaced))
+                .foregroundColor(.white)
+                .multilineTextAlignment(.center)
+                .frame(height: 56)
+                .background(Color.white.opacity(0.04))
+                .cornerRadius(16)
+                .focused($isTextFieldFocused)
+                .submitLabel(.done)
+                .textInputAutocapitalization(.never)
+                .disableAutocorrection(true)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(
+                            viewModel.isTypingSuccess ? Color(hex: "10B981") : Color.white.opacity(0.12),
+                            lineWidth: 1.5
+                        )
+                )
+                .onChange(of: text) { newValue in
+                    viewModel.submitTypingInput(newValue)
                 }
+
+            // Checkmark animation on success
+            if viewModel.isTypingSuccess {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundColor(Color(hex: "10B981"))
+                    .font(.title3)
+                    .padding(.trailing, 18)
+                    .transition(.scale.combined(with: .opacity))
             }
         }
         .padding(.horizontal)
+        .onChange(of: viewModel.currentIndex) { _ in
+            // Clear the field when advancing to the next word
+            text = ""
+        }
+        .onAppear {
+            // Auto focus keyboard on transition
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                self.isTextFieldFocused = true
+            }
+        }
     }
 }

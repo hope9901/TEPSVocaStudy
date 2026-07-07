@@ -37,7 +37,8 @@ class QuizSessionViewModel: ObservableObject {
     @Published var isCorrect: Bool? = nil
     
     // Typing practice specific properties
-    @Published var typingInput: String = ""
+    // (the input text itself lives as local @State in TypingInputField so
+    // keystrokes don't republish the whole view model)
     @Published var isTypingSuccess: Bool = false
     @Published var typingMode: TypingMode = .copyMode
     @Published var hintCount: Int = 0
@@ -184,22 +185,21 @@ class QuizSessionViewModel: ObservableObject {
     
     /// Handles user text input for copying/typing vocabulary spelling.
     /// Check is case-insensitive and trims whitespaces.
-    func handleTypingInputChanged() {
-        guard let target = currentTypingWord else { return }
-        
+    func submitTypingInput(_ input: String) {
+        guard let target = currentTypingWord, !isTypingSuccess else { return }
+
         let targetClean = target.word.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        let inputClean = typingInput.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        
+        let inputClean = input.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+
         if inputClean == targetClean {
             // Play TTS on successful copy
             AudioSynthesizer.shared.speak(text: target.word)
-            
+
             isTypingSuccess = true
-            
+
             // Advance to the next word with a slight delay for smooth UI feedback
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
                 guard let self = self else { return }
-                self.typingInput = ""
                 self.isTypingSuccess = false
                 self.currentIndex += 1
                 
