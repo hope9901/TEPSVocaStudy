@@ -137,19 +137,20 @@ struct OptionButton: View {
             }
         }) {
             HStack {
-                HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text(option.meaning)
                         .font(.body)
                         .fontWeight(.medium)
                         .foregroundColor(textColor)
                         .multilineTextAlignment(.leading)
+                        .minimumScaleFactor(0.8)
                     
                     // Reveal the English spelling for the incorrect distractor meanings
                     if isAnswered && !isCorrect {
                         Text("(\(option.word))")
-                            .font(.subheadline)
-                            .fontWeight(.bold)
-                            .foregroundColor(textColor.opacity(0.6))
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundColor(textColor.opacity(0.7))
                     }
                 }
                 
@@ -169,8 +170,9 @@ struct OptionButton: View {
                 }
             }
             .padding(.horizontal, 20)
+            .padding(.vertical, 12)
             .frame(maxWidth: .infinity)
-            .frame(height: 56)
+            .frame(minHeight: 56)
             .background(backgroundColor)
             .cornerRadius(16)
             .overlay(
