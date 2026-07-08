@@ -143,6 +143,8 @@ struct OptionButton: View {
                         .fontWeight(.medium)
                         .foregroundColor(textColor)
                         .multilineTextAlignment(.leading)
+                        .lineLimit(nil)
+                        .fixedSize(horizontal: false, vertical: true)
                         .minimumScaleFactor(0.8)
                     
                     // Reveal the English spelling for the incorrect distractor meanings
@@ -151,6 +153,9 @@ struct OptionButton: View {
                             .font(.caption)
                             .fontWeight(.semibold)
                             .foregroundColor(textColor.opacity(0.7))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.5)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 
