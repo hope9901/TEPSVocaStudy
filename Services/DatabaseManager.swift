@@ -1,3 +1,10 @@
+import Foundation
+import SQLite3
+
+// sqlite3_bind_text needs SQLITE_TRANSIENT so SQLite copies the string before
+// Swift deallocates the temporary C string; passing nil (SQLITE_STATIC) is undefined behavior here.
+private let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+
 struct Distractor: Hashable {
     let word: String
     let meaning: String
@@ -158,8 +165,8 @@ class DatabaseManager {
         
         var statement: OpaquePointer?
         if sqlite3_prepare_v2(db, query, -1, &statement, nil) == SQLITE_OK {
-            sqlite3_bind_text(statement, 1, correctId.cString(using: .utf8), -1, nil)
-            sqlite3_bind_text(statement, 2, unifiedVocabId.cString(using: .utf8), -1, nil)
+            sqlite3_bind_text(statement, 1, correctId.cString(using: .utf8), -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(statement, 2, unifiedVocabId.cString(using: .utf8), -1, SQLITE_TRANSIENT)
             
             while sqlite3_step(statement) == SQLITE_ROW {
                 let word = String(cString: sqlite3_column_text(statement, 1))
@@ -220,7 +227,7 @@ class DatabaseManager {
         let fetchQuery = "SELECT familiar FROM Corpus WHERE id = ?;"
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, fetchQuery, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, id.cString(using: .utf8), -1, nil)
+            sqlite3_bind_text(stmt, 1, id.cString(using: .utf8), -1, SQLITE_TRANSIENT)
             if sqlite3_step(stmt) == SQLITE_ROW {
                 currentFamiliarity = Int(sqlite3_column_int(stmt, 0))
             }
@@ -265,9 +272,9 @@ class DatabaseManager {
         let updateQuery = "UPDATE Corpus SET familiar = ?, scheduledAt = ?, updatedAt = ? WHERE id = ?;"
         if sqlite3_prepare_v2(db, updateQuery, -1, &stmt, nil) == SQLITE_OK {
             sqlite3_bind_int(stmt, 1, Int32(newFamiliarity))
-            sqlite3_bind_text(stmt, 2, scheduledStr.cString(using: .utf8), -1, nil)
-            sqlite3_bind_text(stmt, 3, nowStr.cString(using: .utf8), -1, nil)
-            sqlite3_bind_text(stmt, 4, id.cString(using: .utf8), -1, nil)
+            sqlite3_bind_text(stmt, 2, scheduledStr.cString(using: .utf8), -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 3, nowStr.cString(using: .utf8), -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 4, id.cString(using: .utf8), -1, SQLITE_TRANSIENT)
             
             if sqlite3_step(stmt) != SQLITE_DONE {
                 print("Failed to update familiarity for \(id).")
@@ -294,14 +301,14 @@ class DatabaseManager {
         var stmt: OpaquePointer?
         var success = false
         if sqlite3_prepare_v2(db, query, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, newId.cString(using: .utf8), -1, nil)
-            sqlite3_bind_text(stmt, 2, unifiedVocabId.cString(using: .utf8), -1, nil)
-            sqlite3_bind_text(stmt, 3, word.trimmingCharacters(in: .whitespacesAndNewlines).cString(using: .utf8), -1, nil)
-            sqlite3_bind_text(stmt, 4, meaning.trimmingCharacters(in: .whitespacesAndNewlines).cString(using: .utf8), -1, nil)
-            sqlite3_bind_text(stmt, 5, nowStr.cString(using: .utf8), -1, nil) // scheduledAt gets created time (today)
-            sqlite3_bind_text(stmt, 6, nowStr.cString(using: .utf8), -1, nil)
-            sqlite3_bind_text(stmt, 7, nowStr.cString(using: .utf8), -1, nil)
-            sqlite3_bind_text(stmt, 8, example.trimmingCharacters(in: .whitespacesAndNewlines).cString(using: .utf8), -1, nil)
+            sqlite3_bind_text(stmt, 1, newId.cString(using: .utf8), -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 2, unifiedVocabId.cString(using: .utf8), -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 3, word.trimmingCharacters(in: .whitespacesAndNewlines).cString(using: .utf8), -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 4, meaning.trimmingCharacters(in: .whitespacesAndNewlines).cString(using: .utf8), -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 5, nowStr.cString(using: .utf8), -1, SQLITE_TRANSIENT) // scheduledAt gets created time (today)
+            sqlite3_bind_text(stmt, 6, nowStr.cString(using: .utf8), -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 7, nowStr.cString(using: .utf8), -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 8, example.trimmingCharacters(in: .whitespacesAndNewlines).cString(using: .utf8), -1, SQLITE_TRANSIENT)
             
             if sqlite3_step(stmt) == SQLITE_DONE {
                 success = true
@@ -344,8 +351,8 @@ class DatabaseManager {
         var exists = false
         
         if sqlite3_prepare_v2(db, query, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, unifiedVocabId.cString(using: .utf8), -1, nil)
-            sqlite3_bind_text(stmt, 2, cleanWord.cString(using: .utf8), -1, nil)
+            sqlite3_bind_text(stmt, 1, unifiedVocabId.cString(using: .utf8), -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 2, cleanWord.cString(using: .utf8), -1, SQLITE_TRANSIENT)
             
             if sqlite3_step(stmt) == SQLITE_ROW {
                 let count = sqlite3_column_int(stmt, 0)
@@ -369,7 +376,7 @@ class DatabaseManager {
         let totalQuery = "SELECT COUNT(*) FROM Corpus WHERE vocabularyId = ? AND isDeleted = 0;"
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, totalQuery, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, unifiedVocabId.cString(using: .utf8), -1, nil)
+            sqlite3_bind_text(stmt, 1, unifiedVocabId.cString(using: .utf8), -1, SQLITE_TRANSIENT)
             if sqlite3_step(stmt) == SQLITE_ROW {
                 total = Int(sqlite3_column_int(stmt, 0))
             }
@@ -379,7 +386,7 @@ class DatabaseManager {
         // Familiar (familiar >= 3)
         let familiarQuery = "SELECT COUNT(*) FROM Corpus WHERE vocabularyId = ? AND isDeleted = 0 AND familiar >= 3;"
         if sqlite3_prepare_v2(db, familiarQuery, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, unifiedVocabId.cString(using: .utf8), -1, nil)
+            sqlite3_bind_text(stmt, 1, unifiedVocabId.cString(using: .utf8), -1, SQLITE_TRANSIENT)
             if sqlite3_step(stmt) == SQLITE_ROW {
                 familiar = Int(sqlite3_column_int(stmt, 0))
             }
@@ -389,7 +396,7 @@ class DatabaseManager {
         // Hard words (familiar <= -3)
         let hardQuery = "SELECT COUNT(*) FROM Corpus WHERE vocabularyId = ? AND isDeleted = 0 AND familiar <= -3;"
         if sqlite3_prepare_v2(db, hardQuery, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, unifiedVocabId.cString(using: .utf8), -1, nil)
+            sqlite3_bind_text(stmt, 1, unifiedVocabId.cString(using: .utf8), -1, SQLITE_TRANSIENT)
             if sqlite3_step(stmt) == SQLITE_ROW {
                 hard = Int(sqlite3_column_int(stmt, 0))
             }
@@ -418,7 +425,7 @@ class DatabaseManager {
                 let bindIndex = Int32(index + 1)
                 switch param {
                 case .text(let value):
-                    sqlite3_bind_text(statement, bindIndex, value.cString(using: .utf8), -1, nil)
+                    sqlite3_bind_text(statement, bindIndex, value.cString(using: .utf8), -1, SQLITE_TRANSIENT)
                 case .integer(let value):
                     sqlite3_bind_int(statement, bindIndex, Int32(value))
                 }
@@ -491,7 +498,7 @@ class DatabaseManager {
             sqlite3_bind_int(stmt, 1, Int32(stats.total))
             sqlite3_bind_int(stmt, 2, Int32(stats.familiar))
             sqlite3_bind_int(stmt, 3, Int32(stats.unfamiliar))
-            sqlite3_bind_text(stmt, 4, unifiedVocabId.cString(using: .utf8), -1, nil)
+            sqlite3_bind_text(stmt, 4, unifiedVocabId.cString(using: .utf8), -1, SQLITE_TRANSIENT)
             
             if sqlite3_step(stmt) != SQLITE_DONE {
                 print("Failed to update Vocabulary statistics.")
@@ -525,7 +532,7 @@ class DatabaseManager {
         
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, query, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, unifiedVocabId.cString(using: .utf8), -1, nil)
+            sqlite3_bind_text(stmt, 1, unifiedVocabId.cString(using: .utf8), -1, SQLITE_TRANSIENT)
             if sqlite3_step(stmt) == SQLITE_ROW {
                 todayOrOverdue = Int(sqlite3_column_int(stmt, 0))
                 within3Days = Int(sqlite3_column_int(stmt, 1))

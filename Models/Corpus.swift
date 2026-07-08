@@ -28,3 +28,35 @@ struct Corpus: Identifiable, Hashable, Codable {
         return familiar <= -3
     }
 }
+
+// Meanings imported from multiple sources are joined with "﹒" and frequently
+// repeat the same translation (some run past 250 characters); keep only the
+// first few unique variants when displaying them.
+extension String {
+    func condensedMeaning(maxVariants: Int = 2) -> String {
+        // Split on "﹒" only outside parentheses — inside them it is a word
+        // separator like "(문제﹒갈등을)", not a variant separator.
+        var variants: [String] = []
+        var current = ""
+        var depth = 0
+        for ch in self {
+            if ch == "(" || ch == "（" {
+                depth += 1
+            } else if ch == ")" || ch == "）" {
+                depth = max(0, depth - 1)
+            }
+            if ch == "﹒" && depth == 0 {
+                variants.append(current.trimmingCharacters(in: .whitespacesAndNewlines))
+                current = ""
+            } else {
+                current.append(ch)
+            }
+        }
+        variants.append(current.trimmingCharacters(in: .whitespacesAndNewlines))
+
+        var seen = Set<String>()
+        let unique = variants.filter { !$0.isEmpty && seen.insert($0).inserted }
+        guard !unique.isEmpty else { return self }
+        return unique.prefix(maxVariants).joined(separator: "﹒")
+    }
+}

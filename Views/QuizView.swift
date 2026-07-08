@@ -5,10 +5,10 @@ struct QuizView: View {
     
     var body: some View {
         VStack(spacing: 24) {
-            Spacer()
-            
-            // Word Card
+            // Word Card (scrolls when a long example sentence exceeds the space
+            // left over by the answer options, instead of truncating the text)
             if let target = viewModel.currentWord {
+                ScrollView(showsIndicators: false) {
                 VStack(spacing: 20) {
                     // English Word & Audio Icon
                     HStack(spacing: 12) {
@@ -49,6 +49,7 @@ struct QuizView: View {
                                 .foregroundColor(.gray)
                                 .multilineTextAlignment(.center)
                                 .lineSpacing(4)
+                                .fixedSize(horizontal: false, vertical: true)
                                 .padding(.horizontal)
                         }
                         .padding(.top, 10)
@@ -66,10 +67,12 @@ struct QuizView: View {
                         .stroke(Color.white.opacity(0.08), lineWidth: 1)
                 )
                 .padding(.horizontal)
+                .padding(.top, 16)
+                }
+            } else {
+                Spacer()
             }
-            
-            Spacer()
-            
+
             // Multiple Choice Options (4-choice Distractors)
             VStack(spacing: 14) {
                 ForEach(viewModel.options) { option in
@@ -138,7 +141,7 @@ struct OptionButton: View {
         }) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(option.meaning)
+                    Text(option.meaning.condensedMeaning())
                         .font(.body)
                         .fontWeight(.medium)
                         .foregroundColor(textColor)

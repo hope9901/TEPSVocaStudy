@@ -4,7 +4,10 @@ import AVFoundation
 class AudioSynthesizer {
     static let shared = AudioSynthesizer()
     private let synthesizer = AVSpeechSynthesizer()
-    
+    // Voice lookup scans the installed-voice list and is slow enough to cause
+    // a visible hitch when done on every utterance, so resolve it once.
+    private let englishVoice = AVSpeechSynthesisVoice(language: "en-US") ?? AVSpeechSynthesisVoice(language: "en")
+
     private init() {
         // Set audio session category to ambient so it plays audio even in silent mode if needed, 
         // or just let default playback play.
@@ -24,12 +27,11 @@ class AudioSynthesizer {
         guard !text.isEmpty else { return }
         
         let utterance = AVSpeechUtterance(string: text)
-        utterance.voice = AVSpeechSynthesisVoice(language: language)
-        
-        // en-US voice check fallback
-        if utterance.voice == nil {
-            // If the specific voice is not installed, use default English voice
-            utterance.voice = AVSpeechSynthesisVoice(language: "en")
+        if language == "en-US" {
+            utterance.voice = englishVoice
+        } else {
+            // Fall back to the cached English voice if the requested one is not installed
+            utterance.voice = AVSpeechSynthesisVoice(language: language) ?? englishVoice
         }
         
         // Speed (0.5 is default average rate)
