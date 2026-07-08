@@ -25,6 +25,12 @@ class DatabaseManager {
     // The unified vocabulary ID we migrated to
     private let unifiedVocabId = "unified-teps-vocab-id"
     private let dbName = "v85_20260312T133124Z.db"
+
+    // Bump this whenever the bundled DB's word content changes (typo fixes,
+    // new words, …). Existing installs then sync the new content into their
+    // Documents copy on next launch while keeping familiar/scheduledAt.
+    private let bundledContentVersion = 2
+    private let bundledContentVersionKey = "bundledContentVersion"
     
     private init() {
         openDatabase()
@@ -47,10 +53,12 @@ class DatabaseManager {
         print("Database path: \(dbURL.path)")
         
         // Copy DB from bundle if not present in Documents
+        var freshCopy = false
         if !fileManager.fileExists(atPath: dbURL.path) {
             if let bundleURL = Bundle.main.url(forResource: "v85_20260312T133124Z", withExtension: "db") {
                 do {
                     try fileManager.copyItem(at: bundleURL, to: dbURL)
+                    freshCopy = true
                     print("Successfully copied database from Bundle to Documents.")
                 } catch {
                     print("Error copying database: \(error.localizedDescription)")
@@ -60,7 +68,7 @@ class DatabaseManager {
                 print("Database not found in Bundle, creating empty database in Documents.")
             }
         }
-        
+
         if sqlite3_open(dbURL.path, &db) != SQLITE_OK {
             print("Failed to open database.")
             db = nil
@@ -68,7 +76,83 @@ class DatabaseManager {
             print("Successfully opened database.")
             // Enable Foreign keys
             sqlite3_exec(db, "PRAGMA foreign_keys = ON;", nil, nil, nil)
+            migrateBundledContentIfNeeded(freshCopy: freshCopy)
         }
+    }
+
+    // MARK: - Bundled Content Migration
+
+    /// Syncs word content (spelling, meanings, examples, deletions) from the
+    /// bundled DB into the user's Documents copy without touching learning
+    /// progress (familiar, scheduledAt). Runs once per bundledContentVersion bump.
+    private func migrateBundledContentIfNeeded(freshCopy: Bool) {
+        guard db != nil else { return }
+
+        let defaults = UserDefaults.standard
+        // A fresh copy already contains the latest content — just record the version.
+        if freshCopy || defaults.integer(forKey: bundledContentVersionKey) >= bundledContentVersion {
+            defaults.set(bundledContentVersion, forKey: bundledContentVersionKey)
+            return
+        }
+        guard let bundleURL = Bundle.main.url(forResource: "v85_20260312T133124Z", withExtension: "db") else { return }
+
+        // Attach the bundled DB read-only next to the Documents DB
+        var attachStmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, "ATTACH DATABASE ? AS bundled;", -1, &attachStmt, nil) == SQLITE_OK else { return }
+        sqlite3_bind_text(attachStmt, 1, bundleURL.path.cString(using: .utf8), -1, SQLITE_TRANSIENT)
+        let attached = sqlite3_step(attachStmt) == SQLITE_DONE
+        sqlite3_finalize(attachStmt)
+        guard attached else {
+            print("Migration: failed to attach bundled DB.")
+            return
+        }
+
+        let migrationSQL = """
+            BEGIN TRANSACTION;
+
+            -- Refresh content of existing rows; familiar and scheduledAt stay untouched
+            UPDATE Corpus SET
+                word = b.word,
+                meaning = b.meaning,
+                pos = b.pos,
+                pronunciation = b.pronunciation,
+                "desc" = b."desc",
+                synonym = b.synonym,
+                antonym = b.antonym,
+                image = b.image,
+                exampleSentence = b.exampleSentence,
+                isDeleted = b.isDeleted,
+                updatedAt = b.updatedAt
+            FROM bundled.Corpus AS b
+            WHERE Corpus.id = b.id;
+
+            -- Add words that are new in the bundle (user-added words are untouched)
+            INSERT INTO Corpus (id, vocabularyId, word, meaning, pos, pronunciation, "desc",
+                                synonym, antonym, image, familiar, isDeleted, scheduledAt,
+                                updatedAt, createdAt, exampleSentence)
+            SELECT b.id, b.vocabularyId, b.word, b.meaning, b.pos, b.pronunciation, b."desc",
+                   b.synonym, b.antonym, b.image, b.familiar, b.isDeleted, b.scheduledAt,
+                   b.updatedAt, b.createdAt, b.exampleSentence
+            FROM bundled.Corpus AS b
+            WHERE b.id NOT IN (SELECT id FROM Corpus);
+
+            COMMIT;
+        """
+
+        var errMsg: UnsafeMutablePointer<CChar>?
+        if sqlite3_exec(db, migrationSQL, nil, nil, &errMsg) == SQLITE_OK {
+            defaults.set(bundledContentVersion, forKey: bundledContentVersionKey)
+            print("Migration: bundled content v\(bundledContentVersion) synced (progress preserved).")
+        } else {
+            let message = errMsg.map { String(cString: $0) } ?? "unknown"
+            print("Migration failed: \(message)")
+            sqlite3_exec(db, "ROLLBACK;", nil, nil, nil)
+        }
+        sqlite3_free(errMsg)
+        sqlite3_exec(db, "DETACH DATABASE bundled;", nil, nil, nil)
+
+        // Refresh cached vocabulary statistics after content changes
+        updateVocabularyStatistics()
     }
     
     // MARK: - Core Query Operations
