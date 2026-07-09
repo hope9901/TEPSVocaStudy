@@ -148,7 +148,6 @@ struct OptionButton: View {
                         .multilineTextAlignment(.leading)
                         .lineLimit(nil)
                         .fixedSize(horizontal: false, vertical: true)
-                        .minimumScaleFactor(0.8)
                     
                     // Reveal the English spelling for the incorrect distractor meanings
                     if isAnswered && !isCorrect {
@@ -157,7 +156,6 @@ struct OptionButton: View {
                             .fontWeight(.semibold)
                             .foregroundColor(textColor.opacity(0.7))
                             .lineLimit(1)
-                            .minimumScaleFactor(0.5)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -181,6 +179,10 @@ struct OptionButton: View {
             .padding(.vertical, 12)
             .frame(maxWidth: .infinity)
             .frame(minHeight: 56)
+            // Keep the button at its ideal height even when the parent stack
+            // runs out of vertical space — otherwise cornerRadius clips the
+            // top and bottom of three-line content (2-line meaning + word)
+            .fixedSize(horizontal: false, vertical: true)
             .background(backgroundColor)
             .cornerRadius(16)
             .overlay(
