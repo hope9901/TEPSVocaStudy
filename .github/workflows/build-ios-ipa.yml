@@ -1,0 +1,141 @@
+name: Build unsigned iOS IPA
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-unsigned-ios-ipa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-unsigned-ipa:
+    name: Build unsigned IPA for SideStore
+    runs-on: macos-latest
+    timeout-minutes: 30
+
+    env:
+      PROJECT_PATH: TEPSVocaStudy.xcodeproj
+      SCHEME: TEPSVocaStudy
+      DERIVED_DATA: ${{ github.workspace }}/DerivedData
+      OUTPUT_DIR: ${{ github.workspace }}/output
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Show Xcode and iOS SDK information
+        run: |
+          set -euxo pipefail
+          sw_vers
+          xcode-select -p
+          xcodebuild -version
+          xcodebuild -showsdks
+
+      - name: Inspect project and schemes
+        run: |
+          set -euxo pipefail
+          find . \( -name '*.xcodeproj' -o -name '*.xcworkspace' -o -name '*.xcscheme' -o -name 'Package.swift' -o -name 'Podfile' -o -name 'Cartfile' \) -print
+          test -d "$PROJECT_PATH"
+          xcodebuild -list -project "$PROJECT_PATH"
+
+      - name: Resolve Swift package dependencies
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -resolvePackageDependencies \
+            -project "$PROJECT_PATH" \
+            -scheme "$SCHEME" \
+            2>&1 | tee "$RUNNER_TEMP/resolve-packages.log"
+
+      - name: Build unsigned iPhone app
+        run: |
+          set -o pipefail
+          rm -rf "$DERIVED_DATA" "$OUTPUT_DIR"
+          mkdir -p "$OUTPUT_DIR"
+
+          xcodebuild \
+            -project "$PROJECT_PATH" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$DERIVED_DATA" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY='' \
+            clean build \
+            2>&1 | tee "$RUNNER_TEMP/xcodebuild.log"
+
+      - name: Package unsigned IPA
+        run: |
+          set -euxo pipefail
+
+          PRODUCTS_DIR="$DERIVED_DATA/Build/Products/Release-iphoneos"
+          test -d "$PRODUCTS_DIR" || {
+            echo "Release-iphoneos products directory was not created: $PRODUCTS_DIR" >&2
+            find "$DERIVED_DATA/Build/Products" -print || true
+            exit 1
+          }
+
+          APP_CANDIDATES=()
+          while IFS= read -r -d '' candidate; do
+            APP_CANDIDATES+=("$candidate")
+          done < <(find "$PRODUCTS_DIR" -type d -name '*.app' -prune -print0)
+          if [ "${#APP_CANDIDATES[@]}" -eq 0 ]; then
+            echo "No iPhone .app bundle was produced." >&2
+            find "$PRODUCTS_DIR" -print
+            exit 1
+          fi
+
+          APP_PATH=''
+          for candidate in "${APP_CANDIDATES[@]}"; do
+            executable=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$candidate/Info.plist" 2>/dev/null || true)
+            package_type=$(/usr/libexec/PlistBuddy -c 'Print :CFBundlePackageType' "$candidate/Info.plist" 2>/dev/null || true)
+            bundle_id=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$candidate/Info.plist" 2>/dev/null || true)
+            echo "Candidate: $candidate (type=$package_type executable=$executable bundle=$bundle_id)"
+            if [ "$package_type" = 'APPL' ] && [ "$bundle_id" = 'com.hope9901.TEPSVocaStudy' ] && [ -x "$candidate/$executable" ]; then
+              APP_PATH="$candidate"
+              break
+            fi
+          done
+
+          test -n "$APP_PATH" || {
+            echo "The main TEPSVocaStudy app bundle was not found among the build products." >&2
+            exit 1
+          }
+
+          APP_BASENAME=$(basename "$APP_PATH")
+          IPA_NAME="${APP_BASENAME%.app}-unsigned.ipa"
+          PACKAGE_DIR="$RUNNER_TEMP/ipa-package"
+          rm -rf "$PACKAGE_DIR"
+          mkdir -p "$PACKAGE_DIR/Payload"
+          ditto "$APP_PATH" "$PACKAGE_DIR/Payload/$APP_BASENAME"
+          (cd "$PACKAGE_DIR" && /usr/bin/zip -qry "$OUTPUT_DIR/$IPA_NAME" Payload)
+
+          test -s "$OUTPUT_DIR/$IPA_NAME" || {
+            echo "IPA was not created or is empty." >&2
+            exit 1
+          }
+          unzip -l "$OUTPUT_DIR/$IPA_NAME"
+          echo "IPA_PATH=$OUTPUT_DIR/$IPA_NAME" >> "$GITHUB_ENV"
+
+      - name: Upload unsigned IPA
+        uses: actions/upload-artifact@v7
+        with:
+          name: TEPSVocaStudy-unsigned-ipa
+          path: ${{ env.IPA_PATH }}
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Print diagnostics on failure
+        if: failure()
+        run: |
+          echo '===== Swift package resolution log (tail) ====='
+          tail -n 200 "$RUNNER_TEMP/resolve-packages.log" 2>/dev/null || true
+          echo '===== xcodebuild log (tail) ====='
+          tail -n 300 "$RUNNER_TEMP/xcodebuild.log" 2>/dev/null || true
+          echo '===== DerivedData products ====='
+          find "$DERIVED_DATA/Build/Products" -print 2>/dev/null || true
