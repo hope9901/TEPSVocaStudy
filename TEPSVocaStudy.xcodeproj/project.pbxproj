@@ -139,6 +139,7 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					4EAF93F2B3B9AF779C4EAA8E = {
+						DevelopmentTeam = 633B86GZAN;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -203,6 +204,7 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 633B86GZAN;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "TEPS Voca";
@@ -290,6 +292,7 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 633B86GZAN;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "TEPS Voca";
