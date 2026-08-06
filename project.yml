@@ -3,6 +3,16 @@ options:
   bundleIdPrefix: com.hope9901
   deploymentTarget:
     iOS: "17.0"
+# 공유 스킴 — GitHub Actions의 xcodebuild -scheme 빌드에 필요
+schemes:
+  TEPSVocaStudy:
+    build:
+      targets:
+        TEPSVocaStudy: all
+    run:
+      config: Debug
+    archive:
+      config: Release
 targets:
   TEPSVocaStudy:
     type: application
