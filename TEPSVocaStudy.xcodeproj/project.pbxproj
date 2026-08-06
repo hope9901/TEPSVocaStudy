@@ -33,9 +33,9 @@
 		73D845F18B9122BDE34948A6 /* AddWordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddWordView.swift; sourceTree = "<group>"; };
 		860157FE5037EB0C2E63A75E /* Corpus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Corpus.swift; sourceTree = "<group>"; };
 		8D194E61A82D55883CE90EA6 /* AudioSynthesizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioSynthesizer.swift; sourceTree = "<group>"; };
-		92980352CC2BBAFA4ED1EC84 /* TEPSVocaStudy.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TEPSVocaStudy.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		92980352CC2BBAFA4ED1EC84 /* TEPSVocaStudy.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = TEPSVocaStudy.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		9607EC060238B9FCA8E2FF47 /* DatabaseManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabaseManager.swift; sourceTree = "<group>"; };
-		996E59E90920E08BBC937833 /* v85_20260312T133124Z.db */ = {isa = PBXFileReference; lastKnownFileType = file; path = v85_20260312T133124Z.db; sourceTree = "<group>"; };
+		996E59E90920E08BBC937833 /* v85_20260312T133124Z.db */ = {isa = PBXFileReference; path = v85_20260312T133124Z.db; sourceTree = "<group>"; };
 		AE32BF076A1B9CA6808032D9 /* QuizSessionViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuizSessionViewModel.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -203,8 +203,8 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 633B86GZAN;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "TEPS Voca";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
@@ -290,8 +290,8 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 633B86GZAN;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "TEPS Voca";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;

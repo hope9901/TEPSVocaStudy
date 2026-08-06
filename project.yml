@@ -16,6 +16,12 @@ targets:
       - path: Database/v85_20260312T133124Z.db
         buildPhase: resources
       - path: Assets.xcassets
+    # Documents 폴더를 Files 앱에 노출 — 학습 DB 백업/기기 간 이전용
+    info:
+      path: Info.plist
+      properties:
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.hope9901.TEPSVocaStudy
