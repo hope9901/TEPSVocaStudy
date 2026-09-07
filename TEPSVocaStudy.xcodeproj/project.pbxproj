@@ -20,6 +20,11 @@
 		D26CB7E16BD18C11758DEAFC /* TypingPracticeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A17B7892117484D5A9EB327 /* TypingPracticeView.swift */; };
 		E0AC83471225B93F79A921D1 /* Corpus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 860157FE5037EB0C2E63A75E /* Corpus.swift */; };
 		EC119BF58D3E481842F42EE2 /* TEPSVocaStudyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A66A77F3D40F50DA1DAD8E0 /* TEPSVocaStudyApp.swift */; };
+		4F28F29CDBCAB5344DA8D019 /* LearningModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = D59C50F081F373DC8DBD0C11 /* LearningModels.swift */; };
+		D4CCA71E27BF31A032AB6410 /* ContextSentenceBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69F7C3C8C75BB7004E69861C /* ContextSentenceBuilder.swift */; };
+		24E6429F934C0238C6B470D3 /* DatabaseManager+Learning.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02516968B6A54D07EB9283D5 /* DatabaseManager+Learning.swift */; };
+		8C5BAC94E0E343155B7F162D /* DistractorService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDCADA0BF5A07B1F1FA08E65 /* DistractorService.swift */; };
+		6F9B141DC781AC7855C42019 /* SRSScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB909A03A05BF5ACB8A9238B /* SRSScheduler.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -37,6 +42,11 @@
 		9607EC060238B9FCA8E2FF47 /* DatabaseManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabaseManager.swift; sourceTree = "<group>"; };
 		996E59E90920E08BBC937833 /* v85_20260312T133124Z.db */ = {isa = PBXFileReference; path = v85_20260312T133124Z.db; sourceTree = "<group>"; };
 		AE32BF076A1B9CA6808032D9 /* QuizSessionViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuizSessionViewModel.swift; sourceTree = "<group>"; };
+		D59C50F081F373DC8DBD0C11 /* LearningModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LearningModels.swift; sourceTree = "<group>"; };
+		69F7C3C8C75BB7004E69861C /* ContextSentenceBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContextSentenceBuilder.swift; sourceTree = "<group>"; };
+		02516968B6A54D07EB9283D5 /* DatabaseManager+Learning.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DatabaseManager+Learning.swift"; sourceTree = "<group>"; };
+		EDCADA0BF5A07B1F1FA08E65 /* DistractorService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DistractorService.swift; sourceTree = "<group>"; };
+		CB909A03A05BF5ACB8A9238B /* SRSScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SRSScheduler.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -52,7 +62,11 @@
 			isa = PBXGroup;
 			children = (
 				8D194E61A82D55883CE90EA6 /* AudioSynthesizer.swift */,
+				69F7C3C8C75BB7004E69861C /* ContextSentenceBuilder.swift */,
+				02516968B6A54D07EB9283D5 /* DatabaseManager+Learning.swift */,
 				9607EC060238B9FCA8E2FF47 /* DatabaseManager.swift */,
+				EDCADA0BF5A07B1F1FA08E65 /* DistractorService.swift */,
+				CB909A03A05BF5ACB8A9238B /* SRSScheduler.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -81,6 +95,7 @@
 			isa = PBXGroup;
 			children = (
 				860157FE5037EB0C2E63A75E /* Corpus.swift */,
+				D59C50F081F373DC8DBD0C11 /* LearningModels.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -183,12 +198,17 @@
 				9D3E08B6A2A3C5BC7A762F5A /* AddWordView.swift in Sources */,
 				CD95328D3D820A9B63174D41 /* AddWordViewModel.swift in Sources */,
 				11226E1E0B123635A0A7DF11 /* AudioSynthesizer.swift in Sources */,
+				D4CCA71E27BF31A032AB6410 /* ContextSentenceBuilder.swift in Sources */,
 				E0AC83471225B93F79A921D1 /* Corpus.swift in Sources */,
 				C6FAC31C3BB884399418E541 /* DashboardView.swift in Sources */,
+				24E6429F934C0238C6B470D3 /* DatabaseManager+Learning.swift in Sources */,
 				BE39A64C11DADDF8B331B093 /* DatabaseManager.swift in Sources */,
+				8C5BAC94E0E343155B7F162D /* DistractorService.swift in Sources */,
+				4F28F29CDBCAB5344DA8D019 /* LearningModels.swift in Sources */,
 				01C48332DFCDDDB100266F5F /* QuizSessionView.swift in Sources */,
 				363DD6909CC98712F6335A44 /* QuizSessionViewModel.swift in Sources */,
 				544E18615B10BFA3594C5C61 /* QuizView.swift in Sources */,
+				6F9B141DC781AC7855C42019 /* SRSScheduler.swift in Sources */,
 				EC119BF58D3E481842F42EE2 /* TEPSVocaStudyApp.swift in Sources */,
 				D26CB7E16BD18C11758DEAFC /* TypingPracticeView.swift in Sources */,
 			);

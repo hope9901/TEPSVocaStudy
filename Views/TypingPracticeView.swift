@@ -81,7 +81,11 @@ struct TypingPracticeView: View {
                 .padding(.horizontal, 16)
 
             // Nuance Example (If exists)
-            if let example = target.exampleSentence, !example.isEmpty {
+            // In blind mode the sentence is masked through ContextSentenceBuilder,
+            // which also catches inflected forms ("commuting" for "commute") —
+            // a plain replacingOccurrences left those visible and leaked the
+            // spelling the learner is supposed to reproduce.
+            if let displayExample = viewModel.typingExampleSentence {
                 Divider().background(Color.white.opacity(0.08))
 
                 VStack(spacing: 6) {
@@ -89,11 +93,6 @@ struct TypingPracticeView: View {
                         .font(.caption2)
                         .fontWeight(.bold)
                         .foregroundColor(Color(hex: "D946EF").opacity(0.7))
-
-                    // Mask the target word inside the sentence if in blind mode
-                    let displayExample = viewModel.typingMode == .copyMode ?
-                        example :
-                        example.replacingOccurrences(of: target.word, with: "______", options: .caseInsensitive)
 
                     Text(displayExample)
                         .font(.subheadline)
