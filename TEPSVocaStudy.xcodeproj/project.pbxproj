@@ -8,12 +8,18 @@
 
 /* Begin PBXBuildFile section */
 		01C48332DFCDDDB100266F5F /* QuizSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44435F655FBF45DCB5BBF570 /* QuizSessionView.swift */; };
+		0AD9BC9C6CC8A66AEFDE4991 /* SessionPlanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8223123269EA5585F0B0FC6A /* SessionPlanner.swift */; };
 		11226E1E0B123635A0A7DF11 /* AudioSynthesizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D194E61A82D55883CE90EA6 /* AudioSynthesizer.swift */; };
+		1C6CA968A4C1573DD77EA621 /* SRSScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57E37AA8241D7F32014BC082 /* SRSScheduler.swift */; };
 		363DD6909CC98712F6335A44 /* QuizSessionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE32BF076A1B9CA6808032D9 /* QuizSessionViewModel.swift */; };
+		3A95AD2A628082260D00D619 /* StudyLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACD0CEF6385F289CC10ABEDF /* StudyLogicTests.swift */; };
 		544E18615B10BFA3594C5C61 /* QuizView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62528FAAA4B427CB8D21C305 /* QuizView.swift */; };
 		61BD70AD13DBE9739DB6271A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0F0875A37801E2680DF9BA8B /* Assets.xcassets */; };
 		778C4DC2719D917B7B55C1B3 /* v85_20260312T133124Z.db in Resources */ = {isa = PBXBuildFile; fileRef = 996E59E90920E08BBC937833 /* v85_20260312T133124Z.db */; };
+		8FDBC4428B10452895E94050 /* StudyModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 753CA2C2C2DE4FC87EF32CA9 /* StudyModels.swift */; };
+		9CA4B83032FC421B038B4751 /* ContextBlanker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B2C38D687BFE9564A98BE27 /* ContextBlanker.swift */; };
 		9D3E08B6A2A3C5BC7A762F5A /* AddWordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73D845F18B9122BDE34948A6 /* AddWordView.swift */; };
+		B95650266BDA845C132153DD /* DistractorService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCBC94CEB91EB08D07F04865 /* DistractorService.swift */; };
 		BE39A64C11DADDF8B331B093 /* DatabaseManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9607EC060238B9FCA8E2FF47 /* DatabaseManager.swift */; };
 		C6FAC31C3BB884399418E541 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 376DCC8448A0E3F2B1CEEAE8 /* DashboardView.swift */; };
 		CD95328D3D820A9B63174D41 /* AddWordViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43F0589C4AC434EC04994AE7 /* AddWordViewModel.swift */; };
@@ -22,21 +28,38 @@
 		EC119BF58D3E481842F42EE2 /* TEPSVocaStudyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A66A77F3D40F50DA1DAD8E0 /* TEPSVocaStudyApp.swift */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		B0724A96AB3CA4BF37F5EC31 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 59CA610DA725F0AC6DDEB9A4 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 4EAF93F2B3B9AF779C4EAA8E;
+			remoteInfo = TEPSVocaStudy;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		0F0875A37801E2680DF9BA8B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		376DCC8448A0E3F2B1CEEAE8 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
 		43F0589C4AC434EC04994AE7 /* AddWordViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddWordViewModel.swift; sourceTree = "<group>"; };
 		44435F655FBF45DCB5BBF570 /* QuizSessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuizSessionView.swift; sourceTree = "<group>"; };
+		57E37AA8241D7F32014BC082 /* SRSScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SRSScheduler.swift; sourceTree = "<group>"; };
 		5A66A77F3D40F50DA1DAD8E0 /* TEPSVocaStudyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TEPSVocaStudyApp.swift; sourceTree = "<group>"; };
 		62528FAAA4B427CB8D21C305 /* QuizView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuizView.swift; sourceTree = "<group>"; };
 		6A17B7892117484D5A9EB327 /* TypingPracticeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypingPracticeView.swift; sourceTree = "<group>"; };
+		6B2C38D687BFE9564A98BE27 /* ContextBlanker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContextBlanker.swift; sourceTree = "<group>"; };
 		73D845F18B9122BDE34948A6 /* AddWordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddWordView.swift; sourceTree = "<group>"; };
+		753CA2C2C2DE4FC87EF32CA9 /* StudyModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudyModels.swift; sourceTree = "<group>"; };
+		8223123269EA5585F0B0FC6A /* SessionPlanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionPlanner.swift; sourceTree = "<group>"; };
 		860157FE5037EB0C2E63A75E /* Corpus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Corpus.swift; sourceTree = "<group>"; };
 		8D194E61A82D55883CE90EA6 /* AudioSynthesizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioSynthesizer.swift; sourceTree = "<group>"; };
 		92980352CC2BBAFA4ED1EC84 /* TEPSVocaStudy.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = TEPSVocaStudy.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		9607EC060238B9FCA8E2FF47 /* DatabaseManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabaseManager.swift; sourceTree = "<group>"; };
 		996E59E90920E08BBC937833 /* v85_20260312T133124Z.db */ = {isa = PBXFileReference; path = v85_20260312T133124Z.db; sourceTree = "<group>"; };
+		ACD0CEF6385F289CC10ABEDF /* StudyLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudyLogicTests.swift; sourceTree = "<group>"; };
 		AE32BF076A1B9CA6808032D9 /* QuizSessionViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuizSessionViewModel.swift; sourceTree = "<group>"; };
+		CCBC94CEB91EB08D07F04865 /* DistractorService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DistractorService.swift; sourceTree = "<group>"; };
+		F564622285DE316F93832E6D /* TEPSVocaStudyTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = TEPSVocaStudyTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -52,7 +75,11 @@
 			isa = PBXGroup;
 			children = (
 				8D194E61A82D55883CE90EA6 /* AudioSynthesizer.swift */,
+				6B2C38D687BFE9564A98BE27 /* ContextBlanker.swift */,
 				9607EC060238B9FCA8E2FF47 /* DatabaseManager.swift */,
+				CCBC94CEB91EB08D07F04865 /* DistractorService.swift */,
+				8223123269EA5585F0B0FC6A /* SessionPlanner.swift */,
+				57E37AA8241D7F32014BC082 /* SRSScheduler.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -73,6 +100,7 @@
 			isa = PBXGroup;
 			children = (
 				92980352CC2BBAFA4ED1EC84 /* TEPSVocaStudy.app */,
+				F564622285DE316F93832E6D /* TEPSVocaStudyTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -81,6 +109,7 @@
 			isa = PBXGroup;
 			children = (
 				860157FE5037EB0C2E63A75E /* Corpus.swift */,
+				753CA2C2C2DE4FC87EF32CA9 /* StudyModels.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -93,10 +122,19 @@
 				4F527C503845C14B21BF1969 /* Database */,
 				E8AC68A958A94065F05A5218 /* Models */,
 				7436DE03D4E2CBE5D7C81E6C /* Services */,
+				FAFDB857DE34078FC55BF877 /* Tests */,
 				FC078DF464C52937262A128D /* ViewModels */,
 				78581C5DA7A594E0BB9EB57D /* Views */,
 				B6BEC24E36544AA48C1AACC9 /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		FAFDB857DE34078FC55BF877 /* Tests */ = {
+			isa = PBXGroup;
+			children = (
+				ACD0CEF6385F289CC10ABEDF /* StudyLogicTests.swift */,
+			);
+			path = Tests;
 			sourceTree = "<group>";
 		};
 		FC078DF464C52937262A128D /* ViewModels */ = {
@@ -129,6 +167,24 @@
 			productReference = 92980352CC2BBAFA4ED1EC84 /* TEPSVocaStudy.app */;
 			productType = "com.apple.product-type.application";
 		};
+		753AA79961018382BBBCC17A /* TEPSVocaStudyTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 355DEAA82DAC8E8C3AE2BFB7 /* Build configuration list for PBXNativeTarget "TEPSVocaStudyTests" */;
+			buildPhases = (
+				CD23D1C804E291B24004A6B6 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				6EEA4F593846147B7B33B788 /* PBXTargetDependency */,
+			);
+			name = TEPSVocaStudyTests;
+			packageProductDependencies = (
+			);
+			productName = TEPSVocaStudyTests;
+			productReference = F564622285DE316F93832E6D /* TEPSVocaStudyTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -139,6 +195,10 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					4EAF93F2B3B9AF779C4EAA8E = {
+						DevelopmentTeam = 633B86GZAN;
+						ProvisioningStyle = Automatic;
+					};
+					753AA79961018382BBBCC17A = {
 						DevelopmentTeam = 633B86GZAN;
 						ProvisioningStyle = Automatic;
 					};
@@ -159,6 +219,7 @@
 			projectRoot = "";
 			targets = (
 				4EAF93F2B3B9AF779C4EAA8E /* TEPSVocaStudy */,
+				753AA79961018382BBBCC17A /* TEPSVocaStudyTests */,
 			);
 		};
 /* End PBXProject section */
@@ -176,6 +237,14 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		CD23D1C804E291B24004A6B6 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3A95AD2A628082260D00D619 /* StudyLogicTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		F48551C55B0DD764683D9EF6 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -183,18 +252,31 @@
 				9D3E08B6A2A3C5BC7A762F5A /* AddWordView.swift in Sources */,
 				CD95328D3D820A9B63174D41 /* AddWordViewModel.swift in Sources */,
 				11226E1E0B123635A0A7DF11 /* AudioSynthesizer.swift in Sources */,
+				9CA4B83032FC421B038B4751 /* ContextBlanker.swift in Sources */,
 				E0AC83471225B93F79A921D1 /* Corpus.swift in Sources */,
 				C6FAC31C3BB884399418E541 /* DashboardView.swift in Sources */,
 				BE39A64C11DADDF8B331B093 /* DatabaseManager.swift in Sources */,
+				B95650266BDA845C132153DD /* DistractorService.swift in Sources */,
 				01C48332DFCDDDB100266F5F /* QuizSessionView.swift in Sources */,
 				363DD6909CC98712F6335A44 /* QuizSessionViewModel.swift in Sources */,
 				544E18615B10BFA3594C5C61 /* QuizView.swift in Sources */,
+				1C6CA968A4C1573DD77EA621 /* SRSScheduler.swift in Sources */,
+				0AD9BC9C6CC8A66AEFDE4991 /* SessionPlanner.swift in Sources */,
+				8FDBC4428B10452895E94050 /* StudyModels.swift in Sources */,
 				EC119BF58D3E481842F42EE2 /* TEPSVocaStudyApp.swift in Sources */,
 				D26CB7E16BD18C11758DEAFC /* TypingPracticeView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		6EEA4F593846147B7B33B788 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 4EAF93F2B3B9AF779C4EAA8E /* TEPSVocaStudy */;
+			targetProxy = B0724A96AB3CA4BF37F5EC31 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		191239299F86023660404CEC /* Release */ = {
@@ -285,6 +367,26 @@
 			};
 			name = Debug;
 		};
+		23C0AE1758EB7E58D4C10770 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 633B86GZAN;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.hope9901.TEPSVocaStudyTests;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TEPSVocaStudy.app/TEPSVocaStudy";
+			};
+			name = Debug;
+		};
 		2F2FBB5AA3CB7EA3415FC602 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -309,6 +411,26 @@
 				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Debug;
+		};
+		3C87F4A3BCA5C0F33B769D0B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 633B86GZAN;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.hope9901.TEPSVocaStudyTests;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TEPSVocaStudy.app/TEPSVocaStudy";
+			};
+			name = Release;
 		};
 		A900A54D2CBB3D7200C62E95 /* Release */ = {
 			isa = XCBuildConfiguration;
@@ -369,6 +491,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		355DEAA82DAC8E8C3AE2BFB7 /* Build configuration list for PBXNativeTarget "TEPSVocaStudyTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				23C0AE1758EB7E58D4C10770 /* Debug */,
+				3C87F4A3BCA5C0F33B769D0B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		417B4FF0426AC1A9C71E505B /* Build configuration list for PBXNativeTarget "TEPSVocaStudy" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

@@ -90,10 +90,11 @@ struct TypingPracticeView: View {
                         .fontWeight(.bold)
                         .foregroundColor(Color(hex: "D946EF").opacity(0.7))
 
-                    // Mask the target word inside the sentence if in blind mode
+                    // Mask the target word (including inflected forms like "began") in blind mode
                     let displayExample = viewModel.typingMode == .copyMode ?
                         example :
-                        example.replacingOccurrences(of: target.word, with: "______", options: .caseInsensitive)
+                        (ContextBlanker.blanked(target.word, in: example)
+                            ?? example.replacingOccurrences(of: target.word, with: ContextBlanker.blank, options: .caseInsensitive))
 
                     Text(displayExample)
                         .font(.subheadline)
