@@ -324,6 +324,23 @@ final class StudyLogicTests: XCTestCase {
         XCTAssertEqual(scalar(legacyURL, "SELECT COUNT(*) FROM WordProgress;"), "3")
     }
 
+    /// An install still on content v3 picks up the v4 headword fixes and keeps its progress.
+    func testE_contentV4FixesReachExistingInstalls() throws {
+        let legacyURL = tempDir.appendingPathComponent("v3.db")
+        try FileManager.default.copyItem(at: bundledDB, to: legacyURL)
+        let id = "11f0-cc5e-20acc0f0-ab32-47ec56f920d8"
+        sql(legacyURL, "UPDATE Corpus SET word = 'casual', familiar = 2, scheduledAt = '2026-10-03T00:00:00Z' WHERE id = '\(id)';")
+
+        let defaults = UserDefaults(suiteName: "tests-\(UUID().uuidString)")!
+        defaults.set(3, forKey: "bundledContentVersion")
+        let db = DatabaseManager(databaseURL: legacyURL, bundledURL: bundledDB, defaults: defaults)
+
+        XCTAssertEqual(scalar(legacyURL, "SELECT word FROM Corpus WHERE id = '\(id)';"), "causal")
+        XCTAssertEqual(scalar(legacyURL, "SELECT familiar FROM Corpus WHERE id = '\(id)';"), "2")
+        XCTAssertEqual(db.fetchProgress(corpusId: id)?.nextReviewAt, "2026-10-03T00:00:00Z")
+        XCTAssertEqual(defaults.integer(forKey: "bundledContentVersion"), 4)
+    }
+
     // MARK: - TEST F: hard-word drill keeps working
 
     func testF_hardWordDrill() throws {

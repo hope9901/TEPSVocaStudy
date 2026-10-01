@@ -24,7 +24,7 @@ class DatabaseManager {
     // Bump this whenever the bundled DB's word content changes (typo fixes,
     // new words, …). Existing installs then sync the new content into their
     // Documents copy on next launch while keeping familiar/scheduledAt.
-    private let bundledContentVersion = 3
+    private let bundledContentVersion = 4
     private let bundledContentVersionKey = "bundledContentVersion"
 
     // Learning-schema version, stored inside the DB (StudyMeta table) so a DB file
