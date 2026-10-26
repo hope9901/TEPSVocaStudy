@@ -338,7 +338,7 @@ final class StudyLogicTests: XCTestCase {
         XCTAssertEqual(scalar(legacyURL, "SELECT word FROM Corpus WHERE id = '\(id)';"), "causal")
         XCTAssertEqual(scalar(legacyURL, "SELECT familiar FROM Corpus WHERE id = '\(id)';"), "2")
         XCTAssertEqual(db.fetchProgress(corpusId: id)?.nextReviewAt, "2026-10-03T00:00:00Z")
-        XCTAssertEqual(defaults.integer(forKey: "bundledContentVersion"), 5)
+        XCTAssertEqual(defaults.integer(forKey: "bundledContentVersion"), 6)
     }
 
     /// Every example sentence has a Korean translation, and an install on content v4
@@ -363,7 +363,29 @@ final class StudyLogicTests: XCTestCase {
         XCTAssertEqual(upgraded.fetchExampleTranslations()[id], "법원은 강력한 판례를 근거로 이전 판결을 유지하기로 했다.")
         XCTAssertEqual(upgraded.fetchExampleTranslations().count, translations.count)
         XCTAssertEqual(upgraded.fetchProgress(corpusId: id)?.nextReviewAt, "2026-11-03T00:00:00Z")
-        XCTAssertEqual(defaults.integer(forKey: "bundledContentVersion"), 5)
+        XCTAssertEqual(defaults.integer(forKey: "bundledContentVersion"), 6)
+    }
+
+    /// Content v6 cleaned example sentences: no duplicated phrases, correct verb
+    /// forms, and each repaired word now produces exactly one blank.
+    func testD_cleanedExamplesProduceSingleBlanks() throws {
+        let db = makeDatabase()
+        let words = db.fetchAllActiveWords()
+        let duplicated = words.filter {
+            ($0.exampleSentence ?? "").range(of: "\\b((?:[A-Za-z'’]+ ){1,3}[A-Za-z'’]+) \\1\\b",
+                                             options: [.regularExpression, .caseInsensitive]) != nil
+        }
+        XCTAssertEqual(duplicated.map(\.word), [])
+
+        let repaired = ["palm off", "hedge against", "stave off", "back away from", "hedge in", "foist off on",
+                        "impute to", "wrest from", "inundate", "embellish", "relegate", "divulge", "beleaguer",
+                        "fare", "harass", "legitimate", "attain", "erode", "planet", "make way"]
+        for word in repaired {
+            let corpus = try XCTUnwrap(words.first { $0.word == word }, word)
+            let blanked = try XCTUnwrap(ContextBlanker.blanked(word, in: corpus.exampleSentence ?? ""), word)
+            XCTAssertEqual(blanked.components(separatedBy: ContextBlanker.blank).count - 1, 1, "\(word): \(blanked)")
+        }
+        XCTAssertNil(words.first { $0.word == "make away" })
     }
 
     func testD_contextQuestionHasTranslationAfterAnswer() {
