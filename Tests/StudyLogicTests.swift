@@ -338,7 +338,42 @@ final class StudyLogicTests: XCTestCase {
         XCTAssertEqual(scalar(legacyURL, "SELECT word FROM Corpus WHERE id = '\(id)';"), "causal")
         XCTAssertEqual(scalar(legacyURL, "SELECT familiar FROM Corpus WHERE id = '\(id)';"), "2")
         XCTAssertEqual(db.fetchProgress(corpusId: id)?.nextReviewAt, "2026-10-03T00:00:00Z")
-        XCTAssertEqual(defaults.integer(forKey: "bundledContentVersion"), 4)
+        XCTAssertEqual(defaults.integer(forKey: "bundledContentVersion"), 5)
+    }
+
+    /// Every example sentence has a Korean translation, and an install on content v4
+    /// (no translations table yet) receives them on upgrade without losing progress.
+    func testE_exampleTranslationsShipAndSyncToExistingInstalls() throws {
+        let fresh = makeDatabase()
+        let words = fresh.fetchAllActiveWords().filter { !($0.exampleSentence ?? "").isEmpty }
+        let translations = fresh.fetchExampleTranslations()
+        XCTAssertEqual(words.filter { translations[$0.id] == nil }.map(\.word), [])
+
+        let legacyURL = tempDir.appendingPathComponent("v4.db")
+        try FileManager.default.copyItem(at: bundledDB, to: legacyURL)
+        let id = try XCTUnwrap(words.first { $0.word == "uphold" }?.id)
+        sql(legacyURL, """
+            DROP TABLE ExampleTranslation;
+            UPDATE Corpus SET familiar = 3, scheduledAt = '2026-11-03T00:00:00Z' WHERE id = '\(id)';
+        """)
+        let defaults = UserDefaults(suiteName: "tests-\(UUID().uuidString)")!
+        defaults.set(4, forKey: "bundledContentVersion")
+        let upgraded = DatabaseManager(databaseURL: legacyURL, bundledURL: bundledDB, defaults: defaults)
+
+        XCTAssertEqual(upgraded.fetchExampleTranslations()[id], "법원은 강력한 판례를 근거로 이전 판결을 유지하기로 했다.")
+        XCTAssertEqual(upgraded.fetchExampleTranslations().count, translations.count)
+        XCTAssertEqual(upgraded.fetchProgress(corpusId: id)?.nextReviewAt, "2026-11-03T00:00:00Z")
+        XCTAssertEqual(defaults.integer(forKey: "bundledContentVersion"), 5)
+    }
+
+    func testD_contextQuestionHasTranslationAfterAnswer() {
+        let db = makeDatabase()
+        let vm = QuizSessionViewModel(database: db)
+        vm.startSession(mode: .context, now: day0)
+        let item = try! XCTUnwrap(vm.currentItems.first { $0.quizType == .context })
+        let translation = vm.exampleTranslation(for: item.corpus)
+        XCTAssertNotNil(translation)
+        XCTAssertTrue(translation!.range(of: "[가-힣]", options: .regularExpression) != nil)
     }
 
     // MARK: - TEST F: hard-word drill keeps working

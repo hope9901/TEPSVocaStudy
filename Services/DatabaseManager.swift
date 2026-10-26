@@ -24,7 +24,7 @@ class DatabaseManager {
     // Bump this whenever the bundled DB's word content changes (typo fixes,
     // new words, …). Existing installs then sync the new content into their
     // Documents copy on next launch while keeping familiar/scheduledAt.
-    private let bundledContentVersion = 4
+    private let bundledContentVersion = 5
     private let bundledContentVersionKey = "bundledContentVersion"
 
     // Learning-schema version, stored inside the DB (StudyMeta table) so a DB file
@@ -89,6 +89,8 @@ class DatabaseManager {
             sqlite3_exec(db, "PRAGMA foreign_keys = ON;", nil, nil, nil)
             migrateBundledContentIfNeeded(freshCopy: freshCopy)
             migrateLearningSchemaIfNeeded()
+            // A DB swapped in through the Files app may predate the translations table.
+            sqlite3_exec(db, "CREATE TABLE IF NOT EXISTS ExampleTranslation (corpusId TEXT NOT NULL PRIMARY KEY, translation TEXT NOT NULL);", nil, nil, nil)
         }
     }
 
@@ -146,6 +148,12 @@ class DatabaseManager {
                    b.updatedAt, b.createdAt, b.exampleSentence
             FROM bundled.Corpus AS b
             WHERE b.id NOT IN (SELECT id FROM Corpus);
+
+            -- Korean translations of the example sentences (bundle-owned, replaced wholesale)
+            CREATE TABLE IF NOT EXISTS ExampleTranslation (corpusId TEXT NOT NULL PRIMARY KEY, translation TEXT NOT NULL);
+            DELETE FROM ExampleTranslation;
+            INSERT INTO ExampleTranslation (corpusId, translation)
+            SELECT corpusId, translation FROM bundled.ExampleTranslation;
 
             COMMIT;
         """
@@ -277,6 +285,22 @@ class DatabaseManager {
     func fetchAllActiveWords() -> [Corpus] {
         let query = "SELECT \(corpusColumns) FROM Corpus c WHERE c.vocabularyId = ? AND c.isDeleted = 0;"
         return executeQuery(query: query, params: [.text(unifiedVocabId)])
+    }
+
+    /// Korean translations of example sentences, keyed by Corpus id.
+    func fetchExampleTranslations() -> [String: String] {
+        guard let db = db else { return [:] }
+        var result: [String: String] = [:]
+        var stmt: OpaquePointer?
+        if sqlite3_prepare_v2(db, "SELECT corpusId, translation FROM ExampleTranslation;", -1, &stmt, nil) == SQLITE_OK {
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                if let id = sqlite3_column_text(stmt, 0), let text = sqlite3_column_text(stmt, 1) {
+                    result[String(cString: id)] = String(cString: text)
+                }
+            }
+        }
+        sqlite3_finalize(stmt)
+        return result
     }
 
     /// Number of words introduced (first answered) since `start`.

@@ -8,7 +8,7 @@ struct QuizView: View {
             // Word Card (scrolls when a long example sentence exceeds the space
             // left over by the answer options, instead of truncating the text)
             if let item = viewModel.currentItem {
-                ScrollView(showsIndicators: false) {
+                ScrollView(showsIndicators: true) {
                 VStack(spacing: 20) {
                     if item.quizType == .context, let blanked = item.blankedSentence {
                         contextQuestion(item: item, blanked: blanked)
@@ -97,7 +97,7 @@ struct QuizView: View {
 
         // The example sentence gives away the meaning, so it only appears after answering.
         if viewModel.isAnswered, let sentence = target.exampleSentence, !sentence.isEmpty {
-            exampleBlock(title: "뉘앙스 예문", sentence: sentence)
+            exampleBlock(title: "뉘앙스 예문", sentence: sentence, translation: viewModel.exampleTranslation(for: target))
                 .transition(.opacity)
         }
     }
@@ -115,13 +115,20 @@ struct QuizView: View {
             .background(Color(hex: "F59E0B").opacity(0.12))
             .cornerRadius(8)
 
+        // After answering the card also holds the translation and the answer line,
+        // so the sentence steps down a size to keep everything on one screen.
         Text(viewModel.isAnswered ? (item.corpus.exampleSentence ?? blanked) : blanked)
-            .font(.title3)
+            .font(viewModel.isAnswered ? .body : .title3)
             .fontWeight(.medium)
             .foregroundColor(.white)
             .multilineTextAlignment(.center)
-            .lineSpacing(6)
+            .lineSpacing(viewModel.isAnswered ? 4 : 6)
             .fixedSize(horizontal: false, vertical: true)
+
+        if viewModel.isAnswered, let translation = viewModel.exampleTranslation(for: item.corpus) {
+            translationText(translation)
+                .transition(.opacity)
+        }
 
         // Pronouncing the word before answering would reveal it.
         if viewModel.isAnswered {
@@ -138,6 +145,26 @@ struct QuizView: View {
         }
     }
 
+    /// Korean rendering of the example sentence, shown under the sentence after answering.
+    private func translationText(_ translation: String) -> some View {
+        VStack(spacing: 6) {
+            Text("해석")
+                .font(.caption2)
+                .fontWeight(.bold)
+                .foregroundColor(Color(hex: "F59E0B").opacity(0.8))
+            Text(translation)
+                .font(.subheadline)
+                .foregroundColor(.white.opacity(0.75))
+                .multilineTextAlignment(.center)
+                .lineSpacing(4)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity)
+        .background(Color.white.opacity(0.04))
+        .cornerRadius(14)
+    }
+
     private func speakButton(_ word: String) -> some View {
         Button(action: {
             AudioSynthesizer.shared.speak(text: word)
@@ -151,7 +178,7 @@ struct QuizView: View {
         }
     }
 
-    private func exampleBlock(title: String, sentence: String) -> some View {
+    private func exampleBlock(title: String, sentence: String, translation: String?) -> some View {
         VStack(spacing: 8) {
             Text(title)
                 .font(.caption2)
@@ -170,6 +197,16 @@ struct QuizView: View {
                 .lineSpacing(4)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal)
+
+            if let translation {
+                Text(translation)
+                    .font(.footnote)
+                    .foregroundColor(.white.opacity(0.6))
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal)
+            }
         }
         .padding(.top, 10)
     }

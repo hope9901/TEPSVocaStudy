@@ -71,6 +71,7 @@ class QuizSessionViewModel: ObservableObject {
     // MARK: - Properties
     private let database: DatabaseManager
     private var distractors: DistractorService?
+    private var translations: [String: String]?
     /// Words already answered once this session; later answers are corrections.
     private var firstAttempted: Set<String> = []
     private var correctedIds: Set<String> = []
@@ -86,6 +87,15 @@ class QuizSessionViewModel: ObservableObject {
     }
 
     var currentWord: Corpus? { currentItem?.corpus }
+
+    /// Korean translation of a word's example sentence. Views show it only after
+    /// the answer is revealed — it restates the meaning.
+    func exampleTranslation(for corpus: Corpus) -> String? {
+        if translations == nil {
+            translations = database.fetchExampleTranslations()
+        }
+        return translations?[corpus.id]
+    }
 
     // Current word for typing practice
     var currentTypingItem: SessionItem? {

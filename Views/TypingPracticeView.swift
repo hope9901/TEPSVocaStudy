@@ -104,6 +104,16 @@ struct TypingPracticeView: View {
                         .multilineTextAlignment(.center)
                         .lineSpacing(4)
                         .fixedSize(horizontal: false, vertical: true)
+
+                    // The meaning is already on the card, so the translation reveals no spelling.
+                    if let translation = viewModel.exampleTranslation(for: target) {
+                        Text(translation)
+                            .font(.footnote)
+                            .foregroundColor(.white.opacity(0.6))
+                            .multilineTextAlignment(.center)
+                            .lineSpacing(3)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
         }
