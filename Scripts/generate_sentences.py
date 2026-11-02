@@ -1,150 +1,131 @@
-import sqlite3
-import os
-import json
-import time
-from concurrent.futures import ThreadPoolExecutor
+#!/usr/bin/env python3
+"""Claude 로 예문을 생성해 DB 에 채운다. (Gemini 판과 같은 일을 하는 대안)
 
-# Try to import anthropic, prompt user if not installed
+Gemini 판과 다른 점은 구조화 출력을 쓴다는 것뿐이다. 응답 스키마를 모델에
+강제하므로 마크다운 펜스를 벗겨내거나 JSON 파싱 실패를 처리할 필요가 없다.
+
+사용법:
+    export ANTHROPIC_API_KEY=...
+    python3 Scripts/generate_sentences.py              # 전체
+    python3 Scripts/generate_sentences.py --limit 40   # 맛보기
+    python3 Scripts/generate_sentences.py --model claude-haiku-5-5
+"""
+import argparse
+import os
+import sys
+import time
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import sentence_tools as st
+
 try:
     import anthropic
+    from pydantic import BaseModel
 except ImportError:
-    print("Error: The 'anthropic' library is not installed. Please run 'pip install anthropic' first.")
-    # We will write a placeholder print but continue compilation
+    print("필요한 패키지가 없습니다.  pip install anthropic pydantic")
     anthropic = None
 
-DB_PATH = r"f:\project2\TEPSvoca\v85_20260312T133124Z.db"
-MODEL_NAME = "claude-3-5-sonnet-20240620"
-BATCH_SIZE = 40  # Process 40 words per prompt to balance context size and response limits
+DEFAULT_MODEL = "claude-opus-5-5"
+BATCH_SIZE = 40
 
-def get_db_connection():
-    return sqlite3.connect(DB_PATH)
 
-def fetch_words_needing_sentences():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT id, word, meaning 
-        FROM Corpus 
-        WHERE isDeleted = 0 
-          AND (exampleSentence IS NULL OR exampleSentence = '')
-        ORDER BY word;
-    """)
-    rows = cursor.fetchall()
-    conn.close()
-    return [{"id": r[0], "word": r[1], "meaning": r[2]} for r in rows]
+if anthropic:
+    class SentenceItem(BaseModel):
+        word: str
+        sentence: str
 
-def update_sentences_in_db(updates):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.executemany("""
-        UPDATE Corpus 
-        SET exampleSentence = ?, updatedAt = datetime('now')
-        WHERE id = ?;
-    """, [(u['sentence'], u['id']) for u in updates])
-    conn.commit()
-    conn.close()
+    class SentenceBatch(BaseModel):
+        items: list[SentenceItem]
 
-def generate_batch_sentences(client, batch):
-    # Prepare the prompt
-    word_list_str = "\n".join([f"- {item['word']} ({item['meaning']})" for item in batch])
-    
-    prompt = f"""You are a TEPS (Test of English for International Communication) vocabulary expert.
-Generate exactly ONE natural, academic, or business-related English example sentence for each of the target words listed below. 
-The sentence should clearly illustrate the word's meaning and typical usage in a TEPS context.
-Keep the sentences concise (usually 10-25 words) and advanced.
 
-Target Words:
-{word_list_str}
+def ask(client, model, batch, stricter=False):
+    prompt = st.build_prompt(batch, json_hint=False)
+    if stricter:
+        prompt += ("\nThe previous attempt failed because the sentences did not contain "
+                   "the target word itself. Write the target word literally, exactly as "
+                   "given (an inflected form of that same word is acceptable).\n")
 
-You MUST respond ONLY with a raw JSON array of objects. Do not include any markdown wrappers (like ```json ... ```), explanations, or trailing text.
-The JSON format must strictly match this structure:
-[
-  {{"word": "word1", "sentence": "Example sentence for word1."}},
-  {{"word": "word2", "sentence": "Example sentence for word2."}}
-]
-"""
+    for attempt in range(4):
+        try:
+            response = client.messages.parse(
+                model=model,
+                max_tokens=16000,
+                messages=[{"role": "user", "content": prompt}],
+                output_format=SentenceBatch,
+            )
+            parsed = response.parsed_output
+            return [{"word": i.word, "sentence": i.sentence} for i in parsed.items]
+        except anthropic.RateLimitError:
+            wait = 10 * (attempt + 1)
+            print(f"    요청 한도 초과 — {wait}초 대기")
+            time.sleep(wait)
+        except anthropic.APIStatusError as exc:
+            print(f"    API 오류 {exc.status_code}: {exc}")
+            if exc.status_code < 500:
+                return []
+            time.sleep(5 * (attempt + 1))
+        except anthropic.APIConnectionError as exc:
+            print(f"    연결 실패: {exc}")
+            time.sleep(5 * (attempt + 1))
+    return []
 
-    try:
-        response = client.messages.create(
-            model=MODEL_NAME,
-            max_tokens=4000,
-            temperature=0.3,
-            system="You are a strict JSON generator. You output only raw, valid JSON arrays. Do not add conversational text or markdown formatting.",
-            messages=[
-                {"role": "user", "content": prompt}
-            ]
-        )
-        
-        content = response.content[0].text.strip()
-        # Clean markdown codeblock formatting if Claude added it despite instructions
-        if content.startswith("```"):
-            lines = content.split("\n")
-            if lines[0].startswith("```json") or lines[0].startswith("```"):
-                content = "\n".join(lines[1:-1]).strip()
-                
-        results = json.loads(content)
-        
-        # Map results back to IDs
-        updates = []
-        word_to_id = {item['word'].lower().strip(): item['id'] for item in batch}
-        
-        for res in results:
-            w_clean = res.get('word', '').lower().strip()
-            sentence = res.get('sentence', '').strip()
-            if w_clean in word_to_id and sentence:
-                updates.append({
-                    "id": word_to_id[w_clean],
-                    "sentence": sentence
-                })
-        return updates
-    except Exception as e:
-        print(f"Error generating sentences for batch starting with '{batch[0]['word']}': {e}")
-        return []
 
 def main():
-    if not anthropic:
-        print("Please install the anthropic package and try again.")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--db", default=st.DEFAULT_DB)
+    parser.add_argument("--model", default=DEFAULT_MODEL)
+    parser.add_argument("--limit", type=int, default=None)
+    parser.add_argument("--dry-run", action="store_true")
+    args = parser.parse_args()
+
+    before = st.coverage(args.db)
+    print(f"DB: {args.db}")
+    print(f"시작 커버리지: 활성 {before['total']} / 예문 {before['has_sentence']} / "
+          f"문맥 사용가능 {before['context_usable']} "
+          f"({before['context_usable'] / before['total'] * 100:.1f}%)")
+
+    words = st.fetch_words_needing_sentences(args.db, args.limit)
+    print(f"생성 대상: {len(words)}개")
+    if args.dry_run or not words or not anthropic:
         return
 
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        print("Error: ANTHROPIC_API_KEY environment variable is not set.")
-        print("Please set it in your environment. Example:")
-        print("  Windows PowerShell: $env:ANTHROPIC_API_KEY='your-api-key'")
-        print("  Windows CMD: set ANTHROPIC_API_KEY=your-api-key")
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        print("ANTHROPIC_API_KEY 가 설정되지 않았습니다.")
         return
 
-    client = anthropic.Anthropic(api_key=api_key)
-    
-    words = fetch_words_needing_sentences()
-    total_words = len(words)
-    print(f"Total active words needing example sentences: {total_words}")
-    
-    if total_words == 0:
-        print("All words already have example sentences!")
-        return
+    client = anthropic.Anthropic()
+    saved, rejected_total = 0, 0
+    started = time.time()
 
-    # Process in batches
-    completed = 0
-    start_time = time.time()
-    
-    for i in range(0, total_words, BATCH_SIZE):
-        batch = words[i:i+BATCH_SIZE]
-        print(f"Processing batch {i//BATCH_SIZE + 1} ({len(batch)} words: '{batch[0]['word']}' to '{batch[-1]['word']}')...")
-        
-        updates = generate_batch_sentences(client, batch)
-        if updates:
-            update_sentences_in_db(updates)
-            completed += len(updates)
-            print(f"Successfully updated {len(updates)} sentences in DB. Total progress: {completed}/{total_words}")
-        else:
-            print(f"Failed to generate sentences for this batch. Skipping...")
-        
-        # Sleep briefly to respect rate limits
-        time.sleep(1)
-        
-    end_time = time.time()
-    print(f"\nAll done! Generated {completed} example sentences in {end_time - start_time:.2f} seconds.")
+    for i in range(0, len(words), BATCH_SIZE):
+        batch = words[i:i + BATCH_SIZE]
+        n = i // BATCH_SIZE + 1
+        total_batches = (len(words) + BATCH_SIZE - 1) // BATCH_SIZE
+        print(f"[{n}/{total_batches}] {batch[0]['word']} … {batch[-1]['word']}")
+
+        good, bad = st.filter_valid(ask(client, args.model, batch), batch)
+
+        if bad:
+            retry_items = [w for w in batch if w["word"] in {b["word"] for b in bad}]
+            print(f"    검증 실패 {len(bad)}개 → 재요청")
+            more_good, still_bad = st.filter_valid(
+                ask(client, args.model, retry_items, stricter=True), retry_items)
+            good += more_good
+            rejected_total += len(still_bad)
+            for b in still_bad:
+                print(f"      포기: {b['word']} :: {b['sentence'][:60]}")
+
+        if good:
+            st.save_sentences(good, args.db)
+            saved += len(good)
+        print(f"    저장 {len(good)}개 (누적 {saved}/{len(words)})")
+
+    after = st.coverage(args.db)
+    print(f"\n완료: {saved}개 저장, {rejected_total}개 포기, {time.time() - started:.0f}초")
+    print(f"최종 커버리지: 문맥 사용가능 {after['context_usable']}/{after['total']} "
+          f"({after['context_usable'] / after['total'] * 100:.1f}%)  "
+          f"[{before['context_usable']} → {after['context_usable']}]")
+
 
 if __name__ == "__main__":
     main()
