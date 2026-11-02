@@ -445,6 +445,25 @@ final class StudyLogicTests: XCTestCase {
         XCTAssertEqual(WordFeatures.inferPartOfSpeech("의도적으로"), .adverb)
     }
 
+    /// The word books declare a part of speech; the old corpus left the column
+    /// NULL, so the gloss was all there was to go on.
+    func testDeclaredPartOfSpeechBeatsTheGloss() {
+        // "통근" reads as a noun, but the book calls the entry a verb.
+        XCTAssertEqual(WordFeatures.partOfSpeech(declared: "verb", gloss: "통근"), .verb)
+        // Nothing declared: fall back to the gloss, as before.
+        XCTAssertEqual(WordFeatures.partOfSpeech(declared: nil, gloss: "보장하다"), .verb)
+        XCTAssertEqual(WordFeatures.partOfSpeech(declared: "", gloss: "편리한"), .adjective)
+        // Several declared: the gloss picks between them.
+        XCTAssertEqual(WordFeatures.partOfSpeech(declared: "adjective, verb", gloss: "우회하다"), .verb)
+        XCTAssertEqual(WordFeatures.partOfSpeech(declared: "noun, verb", gloss: "우회로"), .noun)
+        // Declared, but the gloss points somewhere else entirely: the book wins.
+        XCTAssertEqual(WordFeatures.partOfSpeech(declared: "adjective", gloss: "원인"), .adjective)
+        // Labels we do not model are dropped rather than taken as a match.
+        XCTAssertEqual(WordFeatures.partOfSpeech(declared: "preposition", gloss: "원인"), .noun)
+        XCTAssertEqual(WordFeatures.declaredPartsOfSpeech("adjective, verb"), [.adjective, .verb])
+        XCTAssertEqual(WordFeatures.declaredPartsOfSpeech("conjunction"), [])
+    }
+
     /// "regardless of" used to get noun phrases (drug overdose, sharp dresser) that
     /// could never fill an adverbial blank; options must now be adverbial phrases.
     func testD_phraseDistractorsMatchGrammaticalRole() throws {

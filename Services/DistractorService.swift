@@ -4,9 +4,12 @@ enum PartOfSpeech: String {
     case verb, noun, adjective, adverb
 }
 
-/// Features derived only from data that already exists in Corpus
-/// (the `pos`/`synonym` columns are empty in the bundled DB, so part of speech
-/// is read from the Korean gloss ending: ~하다 → verb, ~한/~적인 → adjective, …).
+/// Features derived only from data that already exists in Corpus.
+///
+/// Part of speech comes from the `pos` column where the word book declares one,
+/// and otherwise from the Korean gloss ending (~하다 → verb, ~한/~적인 →
+/// adjective, …). The gloss still decides between the senses of an entry
+/// declared as more than one part of speech, such as "adjective, verb".
 struct WordFeatures {
     let corpus: Corpus
     let pos: PartOfSpeech
@@ -21,7 +24,7 @@ struct WordFeatures {
         let variants = WordFeatures.meaningVariants(corpus.meaning)
         let primary = WordFeatures.core(variants.first ?? corpus.meaning)
         self.primaryMeaning = primary
-        self.pos = WordFeatures.inferPartOfSpeech(primary)
+        self.pos = WordFeatures.partOfSpeech(declared: corpus.pos, gloss: primary)
         self.categories = WordFeatures.categories(from: corpus.desc)
         self.meaningStems = Set(variants.flatMap(WordFeatures.stems))
         self.tokenCount = corpus.word.split(whereSeparator: { $0.isWhitespace }).count
@@ -53,6 +56,31 @@ struct WordFeatures {
         let first = noParens.split(whereSeparator: { $0 == ";" || $0 == "," }).first.map(String.init) ?? noParens
         return first.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespaces)
+    }
+
+    /// The parts of speech the word book declares, e.g. "adjective, verb".
+    /// Labels outside the four we model (preposition, …) are dropped.
+    static func declaredPartsOfSpeech(_ pos: String?) -> [PartOfSpeech] {
+        guard let pos = pos?.lowercased(), !pos.isEmpty else { return [] }
+        var seen: [PartOfSpeech] = []
+        for piece in pos.split(whereSeparator: { !$0.isLetter }) {
+            if let parsed = PartOfSpeech(rawValue: String(piece)), !seen.contains(parsed) {
+                seen.append(parsed)
+            }
+        }
+        return seen
+    }
+
+    /// The declared part of speech wins over the guess made from the Korean
+    /// gloss, because the gloss is only a hint: "통근" reads as a noun whether
+    /// the entry is a noun or a verb. When several are declared, the gloss
+    /// picks between them, so an entry the book calls "adjective, verb" is
+    /// still treated as a verb when its gloss ends in ~하다.
+    static func partOfSpeech(declared: String?, gloss: String) -> PartOfSpeech {
+        let inferred = inferPartOfSpeech(gloss)
+        let declared = declaredPartsOfSpeech(declared)
+        if declared.isEmpty || declared.contains(inferred) { return inferred }
+        return declared[0]
     }
 
     static func inferPartOfSpeech(_ gloss: String) -> PartOfSpeech {
