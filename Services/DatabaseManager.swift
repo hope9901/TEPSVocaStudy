@@ -26,7 +26,7 @@ class DatabaseManager {
     // Bump this whenever the bundled DB's word content changes (typo fixes,
     // new words, …). Existing installs then sync the new content into their
     // Documents copy on next launch while keeping familiar/scheduledAt.
-    private let bundledContentVersion = 3
+    private let bundledContentVersion = 4
     private let bundledContentVersionKey = "bundledContentVersion"
     
     private init() {
@@ -177,7 +177,7 @@ class DatabaseManager {
         var candidates: [DistractorService.Candidate] = []
 
         let query = """
-            SELECT id, word, meaning
+            SELECT id, word, meaning, pos
             FROM Corpus
             WHERE vocabularyId = ? AND isDeleted = 0 AND word <> '' AND meaning <> ''
             ORDER BY datetime(createdAt) ASC, id ASC;
@@ -194,7 +194,8 @@ class DatabaseManager {
                     DistractorService.Candidate(
                         id: String(cString: idText),
                         word: String(cString: wordText),
-                        meaning: String(cString: meaningText)
+                        meaning: String(cString: meaningText),
+                        pos: sqlite3_column_text(statement, 3).map { String(cString: $0) }
                     )
                 )
             }

@@ -19,8 +19,9 @@ struct Distractor: Hashable {
 /// for every row), so nothing is invented: the signals are derived from data
 /// that actually exists —
 ///
-/// * **품사**: inferred from the shape of the Korean gloss (…하다 → 동사,
-///   …한/…적인 → 형용사, …히/…게 → 부사, otherwise 명사).
+/// * **품사**: taken from the corpus `pos` column where the word book supplies
+///   one, and otherwise inferred from the shape of the Korean gloss (…하다 →
+///   동사, …한/…적인 → 형용사, …히/…게 → 부사, otherwise 명사).
 /// * **의미 근접도**: character-bigram overlap between the Korean glosses, which
 ///   is what makes 저지하다 / 가로막다 compete.
 /// * **같은 단원**: the corpus is stored in the order the chapters were added,
@@ -39,6 +40,9 @@ final class DistractorService {
         let id: String
         let word: String
         let meaning: String
+        /// The corpus `pos` column when the word book supplies one. Older rows
+        /// leave it nil and the part of speech is inferred from the gloss.
+        let pos: String?
     }
 
     private struct IndexEntry {
@@ -99,7 +103,7 @@ final class DistractorService {
         let entries = index.entries
         guard !entries.isEmpty else { return [] }
 
-        let targetPOS = Self.inferPOS(fromMeaning: word.meaning)
+        let targetPOS = Self.partsOfSpeech(declared: word.pos, meaning: word.meaning)
         let targetGlossVariants = Self.glossVariants(word.meaning)
         let targetGlossKeys = Self.glossKeys(from: targetGlossVariants)
         let targetWord = word.word.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
@@ -233,7 +237,7 @@ final class DistractorService {
         for (order, candidate) in candidates.enumerated() {
             let variants = Self.glossVariants(candidate.meaning)
             let keys = Self.glossKeys(from: variants)
-            let pos = Self.inferPOS(fromMeaning: candidate.meaning)
+            let pos = Self.partsOfSpeech(declared: candidate.pos, meaning: candidate.meaning)
             let trimmedWord = candidate.word.trimmingCharacters(in: .whitespacesAndNewlines)
             let entry = IndexEntry(
                 id: candidate.id,
@@ -348,6 +352,22 @@ final class DistractorService {
             break
         }
         return stem
+    }
+
+    /// Part of speech for a word: the corpus column when it has one, falling
+    /// back to guessing from the Korean gloss. Declared values come from the
+    /// word book ("adjective, noun") and are far more reliable than the guess.
+    static func partsOfSpeech(declared: String?, meaning: String) -> Set<InferredPOS> {
+        if let declared = declared, !declared.isEmpty {
+            var tags = Set<InferredPOS>()
+            for part in declared.split(separator: ",") {
+                if let tag = InferredPOS(rawValue: part.trimmingCharacters(in: .whitespaces).lowercased()) {
+                    tags.insert(tag)
+                }
+            }
+            if !tags.isEmpty { return tags }
+        }
+        return inferPOS(fromMeaning: meaning)
     }
 
     /// Part of speech guessed from the ending of each Korean gloss variant.
