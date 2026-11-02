@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """예문 생성 스크립트들이 공유하는 도구.
 
-가장 중요한 건 `locate_word()` 다. 이건 앱의
-Services/ContextSentenceBuilder.swift 를 그대로 옮긴 것으로, 생성된 예문
-안에서 대상 단어를 찾을 수 있는지 판정한다.
+가장 중요한 건 `locate_word()` 다. 판정 자체는 context_blanker 모듈이
+하고(= 앱의 Services/ContextBlanker.swift), 여기서는 그걸 불러 쓴다.
 
 왜 필요한가: Context Mode 는 예문에서 단어를 찾아 빈칸으로 바꿔야 문제가
 된다. 단어를 못 찾으면 그 예문은 의미 문제용 참고 자료일 뿐 문맥 문제로
@@ -13,178 +12,19 @@ Services/ContextSentenceBuilder.swift 를 그대로 옮긴 것으로, 생성된 
 import os
 import re
 import sqlite3
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import context_blanker as cb
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_DB = os.path.join(REPO_ROOT, "Database", "v85_20260312T133124Z.db")
 UNIFIED_VOCAB_ID = "unified-teps-vocab-id"
 
-# ---------------------------------------------------------------- 굴절 처리
-VOWELS = set("aeiou")
-
-IRREGULARS = {
-    "be": {"am", "is", "are", "was", "were", "been", "being"},
-    "have": {"has", "had", "having"},
-    "do": {"does", "did", "done", "doing"},
-    "go": {"goes", "went", "gone", "going"},
-    "get": {"gets", "got", "gotten", "getting"},
-    "take": {"takes", "took", "taken", "taking"},
-    "make": {"makes", "made", "making"},
-    "give": {"gives", "gave", "given", "giving"},
-    "come": {"comes", "came", "coming"},
-    "see": {"sees", "saw", "seen", "seeing"},
-    "know": {"knows", "knew", "known", "knowing"},
-    "think": {"thinks", "thought", "thinking"},
-    "say": {"says", "said", "saying"},
-    "put": {"puts", "putting"},
-    "keep": {"keeps", "kept", "keeping"},
-    "hold": {"holds", "held", "holding"},
-    "run": {"runs", "ran", "running"},
-    "bring": {"brings", "brought", "bringing"},
-    "stand": {"stands", "stood", "standing"},
-    "fall": {"falls", "fell", "fallen", "falling"},
-    "break": {"breaks", "broke", "broken", "breaking"},
-    "leave": {"leaves", "left", "leaving"},
-    "lose": {"loses", "lost", "losing"},
-    "pay": {"pays", "paid", "paying"},
-    "draw": {"draws", "drew", "drawn", "drawing"},
-    "blow": {"blows", "blew", "blown", "blowing"},
-    "wear": {"wears", "wore", "worn", "wearing"},
-    "sit": {"sits", "sat", "sitting"},
-    "speak": {"speaks", "spoke", "spoken", "speaking"},
-    "write": {"writes", "wrote", "written", "writing"},
-    "cut": {"cuts", "cutting"},
-    "let": {"lets", "letting"},
-    "set": {"sets", "setting"},
-    "catch": {"catches", "caught", "catching"},
-    "feel": {"feels", "felt", "feeling"},
-    "find": {"finds", "found", "finding"},
-    "tell": {"tells", "told", "telling"},
-    "man": {"men"},
-    "woman": {"women"},
-    "child": {"children"},
-    "person": {"people"},
-    "foot": {"feet"},
-    "tooth": {"teeth"},
-}
-
-PLACEHOLDER_TOKENS = {
-    "~", "one's", "ones", "oneself", "someone", "somebody", "something",
-    "sb", "sth", "one",
-}
-
-
-def surface_forms(word):
-    """EnglishInflector.surfaceForms(of:) 와 같은 규칙."""
-    base = word.lower().replace("’", "'")
-    forms = {base}
-    if len(base) < 2 or not all(c.isalpha() or c == "'" for c in base):
-        return forms
-
-    forms |= IRREGULARS.get(base, set())
-
-    chars = list(base)
-    last = chars[-1]
-    second = chars[-2] if len(chars) >= 2 else None
-    stem = base[:-1]
-
-    if base.endswith(("s", "x", "z", "ch", "sh", "o")):
-        forms.add(base + "es")
-    elif last == "y" and second and second not in VOWELS:
-        forms.add(stem + "ies")
-    else:
-        forms.add(base + "s")
-
-    if last == "e":
-        forms.add(base + "d")
-        forms.add(stem + "ing")
-        forms.add(base + "s")
-    elif last == "y" and second and second not in VOWELS:
-        forms.add(stem + "ied")
-        forms.add(base + "ing")
-    else:
-        forms.add(base + "ed")
-        forms.add(base + "ing")
-        if base.endswith("c"):
-            forms.add(base + "ked")
-            forms.add(base + "king")
-        if (len(chars) >= 3 and second in VOWELS and last not in VOWELS
-                and last not in "wxy" and chars[-3] not in VOWELS):
-            forms.add(base + last + "ed")
-            forms.add(base + last + "ing")
-
-    if base.endswith("is"):
-        forms.add(base[:-2] + "es")
-
-    return forms
-
-
-# ---------------------------------------------------------------- 문장 매칭
-def _tokenize(chars):
-    tokens, i = [], 0
-    while i < len(chars):
-        if not (chars[i].isalpha() or chars[i] in ("'", "’")):
-            i += 1
-            continue
-        start = i
-        while i < len(chars) and (chars[i].isalpha() or chars[i] in ("'", "’")):
-            i += 1
-        raw = "".join(chars[start:i]).strip("'’")
-        if raw:
-            tokens.append((raw.lower().replace("’", "'"), start, i))
-    return tokens
-
-
-def _make_pattern(target):
-    norm = target.lower().replace("’", "'").replace("~", " ~ ")
-    elements = []
-    for raw in norm.split():
-        tok = "".join(c for c in raw if c.isalpha() or c in "'~")
-        if not tok:
-            continue
-        if tok in PLACEHOLDER_TOKENS:
-            elements.append(("wild", 0, 3))
-        else:
-            elements.append(("word", surface_forms(tok)))
-    return elements if any(e[0] == "word" for e in elements) else []
-
-
-def _match(pattern, pi, tokens, ti):
-    if pi >= len(pattern):
-        return ti
-    if ti > len(tokens):
-        return None
-    kind = pattern[pi][0]
-    if kind == "word":
-        if ti < len(tokens) and tokens[ti][0] in pattern[pi][1]:
-            return _match(pattern, pi + 1, tokens, ti + 1)
-        return None
-    low, high = pattern[pi][1], pattern[pi][2]
-    for consumed in range(low, high + 1):
-        nxt = ti + consumed
-        if nxt > len(tokens):
-            break
-        end = _match(pattern, pi + 1, tokens, nxt)
-        if end is not None:
-            return end
-    return None
-
 
 def locate_word(sentence, target):
     """예문 안에서 대상 단어를 찾으면 True. 앱의 빈칸 처리와 같은 판정."""
-    if not sentence or not sentence.strip() or not target.strip():
-        return False
-    chars = list(sentence.strip())
-    tokens = _tokenize(chars)
-    if not tokens:
-        return False
-    pattern = _make_pattern(target.strip())
-    if not pattern:
-        return False
-    for start in range(len(tokens)):
-        end = _match(pattern, 0, tokens, start)
-        if end is not None and end > start:
-            return True
-    return False
+    return cb.contains(target, sentence)
 
 
 # ------------------------------------------------------------------- DB 도구
@@ -286,10 +126,12 @@ def _build_local_prompt(batch, json_hint=True):
     """로컬 소형 모델용 프롬프트.
 
     큰 모델용과 세 가지가 다르다.
-      - 규칙이 4개가 아니라 3개이고, 모두 한 줄이다
+      - 규칙이 모두 한 줄이다
       - 통과/탈락 예시를 보여준다 (소형 모델에 가장 잘 듣는 장치)
-      - 불규칙 과거형을 금지한다. 앱의 굴절 테이블이 규칙 변화와 흔한
-        불규칙만 알아서, "undo"에 "undid"를 쓰면 빈칸을 못 만든다.
+      - 구(phrase) 는 첫 단어만 활용된다고 못박는다. 앱의 ContextBlanker 는
+        머리 단어에만 굴절형을 허용하므로, "side effect" 를 달라고 했는데
+        "side effects" 가 든 문장을 주면 빈칸을 못 만든다. 측정해 보면
+        실패 예문의 대부분이 이 경우다.
     """
     lines = []
     for item in batch:
@@ -303,16 +145,16 @@ def _build_local_prompt(batch, json_hint=True):
     return f"""Write one English example sentence for each vocabulary word.
 
 RULES
-1. The sentence must contain the word itself, spelled as given.
-   You may add -s, -ed, or -ing. Do NOT use an irregular past form and do
-   NOT use a different word built from it.
-2. 10 to 20 words. Academic, business, or news style.
-3. Match the part of speech in [brackets] and the Korean meaning after "=".
+1. The sentence must contain the word itself, spelled as given. You may add
+   -s, -ed, or -ing to it. Do NOT swap in a different word built from it.
+2. If the entry is a phrase, keep every word after the first exactly as given.
+3. 10 to 20 words. Academic, business, or news style.
+4. Match the part of speech in [brackets] and the Korean meaning after "=".
 
-GOOD   abate      -> The storm began to abate shortly after midnight.
-GOOD   scrutinize -> Auditors will scrutinize every transaction from the final quarter.
-BAD    legitimate -> They confirmed the legitimacy of the results.   (legitimacy is a different word)
-BAD    undo       -> She carefully undid the knot.                   (undid is an irregular past form)
+GOOD   abate       -> The storm began to abate shortly after midnight.
+GOOD   scrutinize  -> Auditors will scrutinize every transaction from the final quarter.
+BAD    legitimate  -> They confirmed the legitimacy of the results.  (legitimacy is another word)
+BAD    side effect -> Patients should watch for side effects.        (must stay "side effect")
 
 WORDS
 {word_list}
