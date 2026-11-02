@@ -242,12 +242,18 @@ def coverage(db_path=None):
     return {"total": total, "has_sentence": has, "context_usable": usable}
 
 
-def build_prompt(batch, json_hint=True):
+def build_prompt(batch, json_hint=True, style="api"):
     """품사까지 넘겨서 엉뚱한 품사의 문장이 나오지 않게 한다.
 
     json_hint=False 는 응답 스키마(구조화 출력)를 쓰는 호출용이다. 그때는
     형식을 스키마가 강제하므로 프롬프트에서 또 지시하면 서로 어긋난다.
+
+    style="local" 은 LM Studio 등 로컬 소형 모델용이다. 규칙을 줄이고
+    예시를 붙인다 — 소형 모델은 긴 규칙 목록보다 보기 두 개에 훨씬 잘
+    따라온다.
     """
+    if style == "local":
+        return _build_local_prompt(batch, json_hint)
     lines = []
     for item in batch:
         pos = f" [{item['pos']}]" if item.get("pos") else ""
@@ -273,6 +279,46 @@ Hard requirements:
 
 Target words:
 {word_list}
+{tail}"""
+
+
+def _build_local_prompt(batch, json_hint=True):
+    """로컬 소형 모델용 프롬프트.
+
+    큰 모델용과 세 가지가 다르다.
+      - 규칙이 4개가 아니라 3개이고, 모두 한 줄이다
+      - 통과/탈락 예시를 보여준다 (소형 모델에 가장 잘 듣는 장치)
+      - 불규칙 과거형을 금지한다. 앱의 굴절 테이블이 규칙 변화와 흔한
+        불규칙만 알아서, "undo"에 "undid"를 쓰면 빈칸을 못 만든다.
+    """
+    lines = []
+    for item in batch:
+        pos = f" [{item['pos']}]" if item.get("pos") else ""
+        lines.append(f"- {item['word']}{pos} = {item['meaning']}")
+    word_list = "\n".join(lines)
+
+    tail = ('\nOutput ONLY the JSON array. No explanation, no markdown fence.\n'
+            if json_hint else "")
+
+    return f"""Write one English example sentence for each vocabulary word.
+
+RULES
+1. The sentence must contain the word itself, spelled as given.
+   You may add -s, -ed, or -ing. Do NOT use an irregular past form and do
+   NOT use a different word built from it.
+2. 10 to 20 words. Academic, business, or news style.
+3. Match the part of speech in [brackets] and the Korean meaning after "=".
+
+GOOD   abate      -> The storm began to abate shortly after midnight.
+GOOD   scrutinize -> Auditors will scrutinize every transaction from the final quarter.
+BAD    legitimate -> They confirmed the legitimacy of the results.   (legitimacy is a different word)
+BAD    undo       -> She carefully undid the knot.                   (undid is an irregular past form)
+
+WORDS
+{word_list}
+
+Return a JSON array, one object per word, same order:
+[{{"word": "abate", "sentence": "..."}}]
 {tail}"""
 
 
