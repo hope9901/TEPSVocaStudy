@@ -30,9 +30,11 @@ import sentence_tools as st
 DEFAULT_URL = "http://localhost:1234/v1"
 # 소형 모델은 목록이 길어지면 뒤쪽 단어를 빠뜨리거나 지어낸다. 15개가 안전선.
 DEFAULT_BATCH = 15
+# 추론형 모델(qwen3 계열 등)은 답 앞에 긴 사고 과정을 쏟아낸다. 그 몫까지 준다.
+DEFAULT_MAX_TOKENS = 4096
 
 
-def post(url, payload, timeout=300):
+def post(url, payload, timeout=600):
     req = urllib.request.Request(
         url,
         data=json.dumps(payload).encode("utf-8"),
@@ -59,23 +61,68 @@ def pick_model(base_url, requested):
     return "local-model"
 
 
+THINK_RE = re.compile(r"<(think|thinking|reasoning)>.*?</\1>", re.S | re.I)
+
+
+def strip_reasoning(text):
+    """추론형 모델의 사고 과정을 걷어낸다.
+
+    qwen3 계열은 답 앞에 <think>…</think> 를 붙이고, 그 안에서 JSON 초안을
+    여러 번 고쳐 쓴다. 그대로 두면 초안이 최종 답으로 잡힌다.
+    """
+    low = text.lower()
+    close = low.rfind("</think>")
+    if close != -1:
+        text = text[close + len("</think>"):]
+    return THINK_RE.sub(" ", text)
+
+
+def _json_candidates(text):
+    """JSON 으로 보이는 조각들을, 그럴듯한 순서로 내놓는다."""
+    for fence in re.findall(r"```(?:json)?\s*(.*?)```", text, re.S):
+        yield fence
+    depth, start = 0, None
+    for i, ch in enumerate(text):
+        if ch in "[{":
+            if depth == 0:
+                start = i
+            depth += 1
+        elif ch in "]}" and depth:
+            depth -= 1
+            if depth == 0:
+                yield text[start:i + 1]
+
+
+def _as_rows(parsed):
+    """리스트든 {"items": […]} 같은 포장이든 행 목록으로 펴낸다."""
+    if isinstance(parsed, dict):
+        for value in parsed.values():
+            if isinstance(value, list):
+                parsed = value
+                break
+        else:
+            parsed = [parsed]
+    if not isinstance(parsed, list):
+        return None
+    if not any(isinstance(r, dict) and "word" in r for r in parsed):
+        return None
+    return parsed
+
+
 def extract_json_array(text):
     """소형 모델은 JSON 앞뒤에 말을 붙이거나 펜스를 씌운다. 배열만 끄집어낸다."""
-    text = text.strip()
-    fence = re.search(r"```(?:json)?\s*(.*?)```", text, re.S)
-    if fence:
-        text = fence.group(1).strip()
-    start, end = text.find("["), text.rfind("]")
-    if start == -1 or end == -1 or end < start:
-        return []
-    try:
-        parsed = json.loads(text[start:end + 1])
-    except json.JSONDecodeError:
-        return []
-    return parsed if isinstance(parsed, list) else []
+    text = strip_reasoning(text or "").strip()
+    for chunk in _json_candidates(text):
+        try:
+            rows = _as_rows(json.loads(chunk))
+        except json.JSONDecodeError:
+            continue
+        if rows is not None:
+            return rows
+    return []
 
 
-def ask(base_url, model, batch, temperature, stricter=False):
+def ask(base_url, model, batch, temperature, max_tokens, stricter=False):
     prompt = st.build_prompt(batch, style="local")
     if stricter:
         prompt += ("\nThe last attempt failed: the sentence did not contain the word "
@@ -85,18 +132,34 @@ def ask(base_url, model, batch, temperature, stricter=False):
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
         "temperature": temperature,
-        "max_tokens": 2048,
+        "max_tokens": max_tokens,
     }
     try:
         data = post(f"{base_url}/chat/completions", payload)
-        return extract_json_array(data["choices"][0]["message"]["content"])
-    except urllib.error.URLError as exc:
+    except urllib.error.HTTPError as exc:            # 서버는 살아 있다 → 이 배치만 포기
+        body = exc.read().decode("utf-8", "replace")[:300]
+        print(f"    서버가 요청을 거부했습니다 (HTTP {exc.code}): {body}")
+        return []
+    except urllib.error.URLError as exc:             # 연결 자체 실패 → 중단
         print(f"    LM Studio 에 연결할 수 없습니다: {exc}")
         print(f"    서버가 {base_url} 에서 돌고 있는지 확인하세요.")
-        return None                                  # None = 치명적, 중단
-    except (KeyError, json.JSONDecodeError) as exc:
+        return None
+    except (TimeoutError, OSError) as exc:
+        print(f"    응답이 오지 않았습니다: {exc}")
+        return []
+
+    try:
+        choice = data["choices"][0]
+    except (KeyError, IndexError, TypeError) as exc:
         print(f"    응답 해석 실패: {exc}")
         return []
+
+    content = (choice.get("message") or {}).get("content") or ""
+    rows = extract_json_array(content)
+    if not rows and choice.get("finish_reason") == "length":
+        print(f"    답이 max_tokens({max_tokens}) 에서 잘렸습니다. "
+              f"--batch-size 를 줄이거나 --max-tokens 를 올리세요.")
+    return rows
 
 
 def main():
@@ -106,6 +169,7 @@ def main():
     parser.add_argument("--model", default=None)
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH)
     parser.add_argument("--temperature", type=float, default=0.4)
+    parser.add_argument("--max-tokens", type=int, default=DEFAULT_MAX_TOKENS)
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--export-prompt", type=int, metavar="N",
@@ -140,7 +204,7 @@ def main():
         n, total = i // size + 1, (len(words) + size - 1) // size
         print(f"[{n}/{total}] {batch[0]['word']} … {batch[-1]['word']}")
 
-        results = ask(args.url, model, batch, args.temperature)
+        results = ask(args.url, model, batch, args.temperature, args.max_tokens)
         if results is None:
             print("중단합니다. 지금까지 저장된 내용은 DB 에 남아 있습니다.")
             break
@@ -151,7 +215,8 @@ def main():
         if missing:
             retry = [w for w in batch if w["word"] in missing]
             print(f"    실패 {len(missing)}개 → 재요청")
-            again = ask(args.url, model, retry, args.temperature, stricter=True)
+            again = ask(args.url, model, retry, args.temperature,
+                        args.max_tokens, stricter=True)
             if again:
                 more_good, _ = st.filter_valid(again, retry)
                 good += more_good
