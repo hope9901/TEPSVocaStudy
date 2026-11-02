@@ -1,186 +1,104 @@
 import Foundation
 
-/// Result of grading a single answer.
-/// `scheduledAt == nil` means "leave the existing review date alone" — used for
-/// focused drills (난공불락 집중 학습) on words that were not actually due, so
-/// practising them never inflates their interval.
-struct ReviewGrade {
-    let familiar: Int
-    let scheduledAt: Date?
-    let intervalDays: Int
-    /// True when this answer counts towards long-term retention statistics.
-    /// Same-session corrections (타이핑 → 재퀴즈) are false.
-    let countsAsGradedReview: Bool
-    let isLapse: Bool
-}
-
-/// Spaced-repetition rules, kept as pure functions so they can be reasoned
-/// about (and ported to a test harness) without a database or a UI.
+/// Pure spaced-repetition rules. No database access, so every rule is unit-testable.
 ///
-/// Two invariants drive the whole design:
-///
-/// 1. A word whose `scheduledAt` is in the future is *never* eligible for a
-///    normal study session — not as a filler, not as a fallback. Sessions are
-///    `due + new` and are allowed to be small.
-/// 2. Getting a word right again inside the same session is **correction**, not
-///    retention. Corrections never raise `familiar` and never lengthen an
-///    interval; only a graded review on a later day can do that.
+/// Scheduling is driven only by long-term evidence: the first answer to a NEW
+/// word, or the first answer to a word whose review date has arrived.
+/// Same-session correction (typing, re-quiz) never reaches this type.
 enum SRSScheduler {
+    /// Interval in days after the n-th consecutive successful spaced review.
+    /// Index 0 is used for a first exposure and for a lapse.
+    static let intervalLadder = [1, 3, 7, 14, 30, 60, 120]
 
-    // MARK: - Tuning
+    /// MASTERED needs a long interval *and* proof the word works in context,
+    /// so recognising a translation alone is never enough.
+    static let masteryMinInterval = 14
 
-    /// `familiar` stays in the legacy [-5, 5] range so existing data, the
-    /// "외운 단어" (>= 3) counter and 난공불락 words (<= -3) keep working.
-    static let minFamiliar = -5
-    static let maxFamiliar = 5
-
-    /// Familiarity at which a word is considered parked in long-term memory.
-    static let masteredFamiliarThreshold = 4
-
-    /// Ebbinghaus-style ladder, indexed by the familiarity *after* a correct
-    /// answer. Unchanged from the original app so existing schedules stay
-    /// meaningful.
-    static func intervalDays(forFamiliar familiar: Int) -> Int {
-        switch familiar {
-        case ...1: return 1
-        case 2: return 3
-        case 3: return 7
-        case 4: return 14
-        default: return 30
-        }
+    struct Outcome: Equatable {
+        let progress: WordProgress
+        let familiar: Int
     }
 
-    /// Interval used after a miss: the word comes back on the next study day,
-    /// not later the same day.
-    static let lapseIntervalDays = 1
-
-    // MARK: - Date helpers
-
-    /// Review dates land on the start of a future *local* day, which makes
-    /// "due today" a stable concept regardless of what time of day the user
-    /// studies. `days` is always >= 1, so a word graded now can never become
-    /// due again during the same calendar day.
-    static func reviewDate(daysFromNow days: Int, now: Date, calendar: Calendar = .current) -> Date {
-        let safeDays = max(1, days)
-        let startOfToday = calendar.startOfDay(for: now)
-        let target = calendar.date(byAdding: .day, value: safeDays, to: startOfToday) ?? now.addingTimeInterval(Double(safeDays) * 86_400)
-        // Guard against DST/calendar oddities producing a date in the past.
-        return target > now ? target : now.addingTimeInterval(Double(safeDays) * 86_400)
-    }
-
-    // MARK: - Grading
-
-    /// Grades one answer.
-    ///
+    /// Applies one long-term answer.
     /// - Parameters:
-    ///   - familiar: current `Corpus.familiar`
-    ///   - isDue: whether `Corpus.scheduledAt` has already arrived. The caller
-    ///     resolves this in SQL, so the legacy date formats stored in the
-    ///     corpus never have to be parsed in Swift.
-    ///   - isCorrect: whether the answer was right
-    ///   - isCorrection: true when the answer happened in the same session as
-    ///     the mistake it is fixing (오답 타이핑 후 재퀴즈)
-    ///   - alreadyFailedThisSession: true when this word has already been
-    ///     penalised in this session, so a repeated miss does not spiral the
-    ///     familiarity down to -5 in a single sitting
-    static func grade(
+    ///   - existing: nil for a NEW word.
+    ///   - familiar: the word's current Corpus.familiar (kept for the hard-word feature).
+    static func apply(
+        existing: WordProgress?,
+        corpusId: String,
         familiar: Int,
-        isDue: Bool,
-        isCorrect: Bool,
-        isCorrection: Bool,
-        alreadyFailedThisSession: Bool,
-        now: Date = Date(),
+        quizType: QuizType,
+        correct: Bool,
+        now: Date,
         calendar: Calendar = .current
-    ) -> ReviewGrade {
-        let clampedFamiliar = clamp(familiar)
-
-        // --- Same-session correction -------------------------------------
-        // The word was just missed; re-answering it now proves today's
-        // correction worked, not that it survived a night of forgetting.
-        // Familiarity is untouched and the word stays scheduled for tomorrow.
-        if isCorrection {
-            return ReviewGrade(
-                familiar: clampedFamiliar,
-                scheduledAt: reviewDate(daysFromNow: lapseIntervalDays, now: now, calendar: calendar),
-                intervalDays: lapseIntervalDays,
-                countsAsGradedReview: false,
-                isLapse: false
-            )
-        }
-
-        // --- Graded miss ---------------------------------------------------
-        if !isCorrect {
-            let newFamiliar = alreadyFailedThisSession ? clampedFamiliar : clamp(clampedFamiliar - 1)
-            // Always tomorrow: never "now" (which would let the word come back
-            // in another session today) and never later than tomorrow either,
-            // because a missed word has to be re-tested soon.
-            return ReviewGrade(
-                familiar: newFamiliar,
-                scheduledAt: reviewDate(daysFromNow: lapseIntervalDays, now: now, calendar: calendar),
-                intervalDays: lapseIntervalDays,
-                countsAsGradedReview: true,
-                isLapse: true
-            )
-        }
-
-        // --- Graded hit ----------------------------------------------------
-        let newFamiliar = clamp(clampedFamiliar + 1)
-        guard isDue else {
-            // Practised ahead of schedule (e.g. 난공불락 집중 학습). Credit the
-            // familiarity but keep the existing review date: answering a word
-            // early must not push its next review further away.
-            return ReviewGrade(
-                familiar: newFamiliar,
-                scheduledAt: nil,
-                intervalDays: 0,
-                countsAsGradedReview: true,
-                isLapse: false
-            )
-        }
-
-        let interval = intervalDays(forFamiliar: newFamiliar)
-        return ReviewGrade(
-            familiar: newFamiliar,
-            scheduledAt: reviewDate(daysFromNow: interval, now: now, calendar: calendar),
-            intervalDays: interval,
-            countsAsGradedReview: true,
-            isLapse: false
+    ) -> Outcome {
+        let nowISO = StudyClock.iso(now)
+        var progress = existing ?? WordProgress(
+            corpusId: corpusId,
+            state: .learning,
+            intervalDays: 0,
+            reviewStreak: 0,
+            lapses: 0,
+            firstStudiedAt: nowISO,
+            lastReviewedAt: nil,
+            nextReviewAt: nowISO
         )
-    }
+        let isFirstExposure = existing == nil
 
-    // MARK: - Question selection
+        recordCounters(&progress, quizType: quizType, correct: correct)
 
-    /// Picks the question type for a word inside a session.
-    ///
-    /// Weak words are asked for meaning first — pushing an unknown word
-    /// straight into a cloze sentence is guesswork. Once the meaning is known
-    /// the word moves to context questions (what TEPS actually tests), and
-    /// mature words are asked for production (typing the spelling).
-    static func questionMode(
-        studyMode: StudyMode,
-        familiar: Int,
-        hasContextSentence: Bool
-    ) -> StudyQuestionMode {
-        switch studyMode {
-        case .meaningOnly:
-            return .meaning
-        case .contextOnly:
-            return hasContextSentence ? .context : .meaning
-        case .mixed:
-            if familiar >= masteredFamiliarThreshold - 1 {
-                // Well-known word: ask it to be produced, not recognised.
-                return .recall
+        if correct {
+            if isFirstExposure {
+                // Recognising a word the first time may be a lucky guess (1 in 4),
+                // so it only earns a next-day check, not a spaced interval.
+                progress.state = .learning
+                progress.intervalDays = intervalLadder[0]
+            } else {
+                progress.reviewStreak += 1
+                let step = min(progress.reviewStreak, intervalLadder.count - 1)
+                progress.intervalDays = intervalLadder[step]
+                progress.state = .review
             }
-            if familiar >= 1 && hasContextSentence {
-                return .context
+        } else {
+            if !isFirstExposure {
+                progress.lapses += 1
             }
-            return .meaning
+            progress.reviewStreak = 0
+            progress.state = .learning
+            // The session itself already re-drills a miss (typing → re-quiz),
+            // so the next long-term check is tomorrow, not later today.
+            progress.intervalDays = intervalLadder[0]
         }
+
+        if progress.state == .review && isMastered(progress) {
+            progress.state = .mastered
+        }
+
+        progress.lastReviewedAt = nowISO
+        progress.nextReviewAt = StudyClock.iso(nextReviewDate(afterDays: progress.intervalDays, from: now, calendar: calendar))
+
+        let newFamiliar = max(-5, min(5, familiar + (correct ? 1 : -1)))
+        return Outcome(progress: progress, familiar: newFamiliar)
     }
 
-    // MARK: - Helpers
+    static func isMastered(_ progress: WordProgress) -> Bool {
+        progress.intervalDays >= masteryMinInterval && progress.contextCorrect > 0
+    }
 
-    static func clamp(_ familiar: Int) -> Int {
-        min(maxFamiliar, max(minFamiliar, familiar))
+    /// Day-based due date: local midnight `days` days after today.
+    static func nextReviewDate(afterDays days: Int, from now: Date, calendar: Calendar = .current) -> Date {
+        let today = StudyClock.startOfDay(now, calendar: calendar)
+        return calendar.date(byAdding: .day, value: max(1, days), to: today) ?? now.addingTimeInterval(Double(max(1, days)) * 86_400)
+    }
+
+    private static func recordCounters(_ progress: inout WordProgress, quizType: QuizType, correct: Bool) {
+        switch (quizType, correct) {
+        case (.meaning, true): progress.meaningCorrect += 1
+        case (.meaning, false): progress.meaningWrong += 1
+        case (.context, true): progress.contextCorrect += 1
+        case (.context, false): progress.contextWrong += 1
+        case (.recall, true): progress.recallCorrect += 1
+        case (.recall, false): progress.recallWrong += 1
+        }
     }
 }

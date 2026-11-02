@@ -2,10 +2,10 @@ import Foundation
 import Combine
 
 enum SessionPhase {
-    case mainQuiz       // Initial quiz session (due reviews + newly introduced words)
+    case mainQuiz       // Today's due reviews + new words (or the hard-word drill)
     case typingReview   // Reviewing incorrect words by typing them out
     case reQuiz         // Re-quiz on the previously incorrect words
-    case finished       // Session completed successfully with all words memorized
+    case finished       // Session completed (or nothing to study today)
 }
 
 enum TypingMode {
@@ -15,40 +15,42 @@ enum TypingMode {
 
 struct QuizOption: Hashable, Identifiable {
     let id = UUID()
+    let corpusId: String
     let word: String
     let meaning: String
 }
 
-/// One question as it is presented on screen.
-struct QuizQuestion {
-    let word: Corpus
-    let mode: StudyQuestionMode
-    /// Sentence with the target blanked out — present for context questions and
-    /// used as a leak-free hint for recall questions.
-    let blankedSentence: String?
+/// What the session achieved, split by kind of evidence.
+struct SessionSummary: Equatable {
+    var newStudied = 0
+    var newCorrect = 0
+    var reviewed = 0
+    var reviewCorrect = 0
+    var drilled = 0
+    var drillCorrect = 0
+    /// Words missed on the first attempt and then fixed via typing + re-quiz.
+    var corrected = 0
+
+    var firstAttemptTotal: Int { newStudied + reviewed + drilled }
+    var firstAttemptCorrect: Int { newCorrect + reviewCorrect + drillCorrect }
 }
 
 class QuizSessionViewModel: ObservableObject {
     // MARK: - Published Properties
     @Published var phase: SessionPhase = .mainQuiz
-    @Published var currentWords: [Corpus] = []
+    @Published var currentItems: [SessionItem] = []
     @Published var currentIndex: Int = 0 {
         didSet {
             self.hintCount = 0
         }
     }
-    @Published var incorrectWords: [Corpus] = []
+    @Published var incorrectItems: [SessionItem] = []
 
     // Quiz specific properties
-    @Published var currentQuestion: QuizQuestion? = nil
     @Published var options: [QuizOption] = []
     @Published var selectedAnswer: QuizOption? = nil
     @Published var isAnswered: Bool = false
     @Published var isCorrect: Bool? = nil
-
-    // Recall (typed answer) question state
-    @Published var recallInput: String = ""
-    @Published var recallSubmittedAnswer: String = ""
 
     // Typing practice specific properties
     // (the input text itself lives as local @State in TypingInputField so
@@ -58,53 +60,51 @@ class QuizSessionViewModel: ObservableObject {
     @Published var hintCount: Int = 0
 
     // Session state
-    @Published var isHardWordsSession: Bool = false
+    @Published private(set) var mode: StudyMode = .meaning
     @Published var totalSessionWordsCount: Int = 0
-    /// How the session was composed — shown in the header and the summary so
-    /// the learner sees real numbers instead of a hard-coded "100 words".
-    @Published var dueWordsCount: Int = 0
-    @Published var newWordsCount: Int = 0
+    @Published private(set) var plannedDueCount: Int = 0
+    @Published private(set) var plannedNewCount: Int = 0
+    @Published private(set) var summary = SessionSummary()
 
-    // Session result counters (first-attempt performance, not correction rounds)
-    @Published var firstTryCorrectCount: Int = 0
-    @Published var firstTryIncorrectCount: Int = 0
-    @Published var correctionRounds: Int = 0
+    var isHardWordsSession: Bool { mode == .hardWords }
 
     // MARK: - Properties
-    private var allWords: [Corpus] = []
-    private var studyMode: StudyMode = .mixed
-    /// Words already penalised in this session; a second miss inside the same
-    /// sitting must not push the familiarity down again.
-    private var failedWordIds: Set<String> = []
-    /// The question type each word was asked with, so the re-quiz can target
-    /// the same skill that failed.
-    private var questionModeByWordId: [String: StudyQuestionMode] = [:]
+    private let database: DatabaseManager
+    private var distractors: DistractorService?
+    private var translations: [String: String]?
+    /// Words already answered once this session; later answers are corrections.
+    private var firstAttempted: Set<String> = []
+    private var correctedIds: Set<String> = []
 
-    // Current word being tested
-    var currentWord: Corpus? {
-        guard currentIndex >= 0 && currentIndex < currentWords.count else { return nil }
-        return currentWords[currentIndex]
+    init(database: DatabaseManager = .shared) {
+        self.database = database
+    }
+
+    // Current question
+    var currentItem: SessionItem? {
+        guard currentIndex >= 0 && currentIndex < currentItems.count else { return nil }
+        return currentItems[currentIndex]
+    }
+
+    var currentWord: Corpus? { currentItem?.corpus }
+
+    /// Korean translation of a word's example sentence. Views show it only after
+    /// the answer is revealed — it restates the meaning.
+    func exampleTranslation(for corpus: Corpus) -> String? {
+        if translations == nil {
+            translations = database.fetchExampleTranslations()
+        }
+        return translations?[corpus.id]
     }
 
     // Current word for typing practice
-    var currentTypingWord: Corpus? {
+    var currentTypingItem: SessionItem? {
         guard phase == .typingReview else { return nil }
-        guard currentIndex >= 0 && currentIndex < incorrectWords.count else { return nil }
-        return incorrectWords[currentIndex]
+        guard currentIndex >= 0 && currentIndex < incorrectItems.count else { return nil }
+        return incorrectItems[currentIndex]
     }
 
-    /// Example sentence for the typing screen with the answer masked in blind
-    /// mode. Inflected forms are masked too ("commuting" for "commute"), which a
-    /// plain string replacement used to miss and leak the spelling.
-    var typingExampleSentence: String? {
-        guard let target = currentTypingWord,
-              let example = target.exampleSentence,
-              !example.isEmpty else { return nil }
-        if typingMode == .copyMode {
-            return example
-        }
-        return ContextSentenceBuilder.maskedSentence(sentence: example, target: target.word)
-    }
+    var currentTypingWord: Corpus? { currentTypingItem?.corpus }
 
     // Spaced out hint string based on hintCount
     var typingHintString: String {
@@ -131,186 +131,115 @@ class QuizSessionViewModel: ObservableObject {
     // MARK: - Session Controls
 
     /// Starts a new study session.
-    ///
     /// - Parameters:
-    ///   - isHardWords: focused drill on 난공불락 words (familiar <= -3). Those
-    ///     are deliberately allowed even when not due — it is an explicit,
-    ///     user-requested drill — but answering them early never pushes their
-    ///     review date further out (see `SRSScheduler.grade`).
-    ///   - studyMode: which question types the session may ask.
-    ///   - newWordsPerSession: how many brand-new words to introduce.
-    ///
-    /// A normal session is `due + new` only. It is never padded with words
-    /// whose review date is still in the future, so a session can be short.
-    func startSession(isHardWords: Bool = false, studyMode: StudyMode = .mixed, newWordsPerSession: Int = SRSConfiguration.default.newWordsPerSession) {
-        self.isHardWordsSession = isHardWords
-        self.studyMode = studyMode
-        self.failedWordIds = []
-        self.questionModeByWordId = [:]
-        self.firstTryCorrectCount = 0
-        self.firstTryIncorrectCount = 0
-        self.correctionRounds = 0
+    ///   - mode: `.meaning` / `.context` build today's due + new session; `.hardWords` drills familiar <= -3.
+    ///   - extraNewWords: study this many extra NEW words beyond today's quota.
+    func startSession(mode: StudyMode, extraNewWords: Int = 0, now: Date = Date()) {
+        self.mode = mode
+        let plan = SessionPlanner(database: database).plan(
+            mode: mode,
+            dailyNewLimit: SessionPlanner.dailyNewLimit(),
+            extraNewWords: extraNewWords,
+            now: now
+        )
 
-        if isHardWords {
-            let hardWords = DatabaseManager.shared.fetchHardWords()
-            self.allWords = hardWords
-            self.dueWordsCount = hardWords.count
-            self.newWordsCount = 0
-        } else {
-            let plan = DatabaseManager.shared.fetchSessionPlan(config: .withNewWordLimit(newWordsPerSession))
-            self.allWords = plan.shuffledWords()
-            self.dueWordsCount = plan.dueWords.count
-            self.newWordsCount = plan.newWords.count
-        }
-
-        self.totalSessionWordsCount = allWords.count
-        self.currentWords = allWords
-        self.incorrectWords = []
+        self.plannedDueCount = plan.dueCount
+        self.plannedNewCount = plan.newCount
+        self.totalSessionWordsCount = plan.items.count
+        self.currentItems = plan.items
+        self.incorrectItems = []
+        self.firstAttempted = []
+        self.correctedIds = []
+        self.summary = SessionSummary()
         self.currentIndex = 0
         self.phase = .mainQuiz
 
-        if allWords.isEmpty {
+        if plan.items.isEmpty {
             self.phase = .finished
         } else {
+            if distractors == nil {
+                distractors = DistractorService(pool: database.fetchAllActiveWords())
+            }
             loadCurrentQuestion()
         }
     }
 
-    /// Prepares the current question (4 multiple choice options, or a typed
-    /// recall prompt for words that are already well known).
+    /// Prepares the current question (4 multiple choice options)
     func loadCurrentQuestion() {
         // Reset answer states
         self.selectedAnswer = nil
         self.isAnswered = false
         self.isCorrect = nil
-        self.recallInput = ""
-        self.recallSubmittedAnswer = ""
 
         // 1. Check if the current phase's questions are all completed
-        if currentIndex >= currentWords.count {
+        if currentIndex >= currentItems.count {
             handlePhaseTransition()
             return
         }
 
-        // 2. Decide what to ask about this word
-        guard let correct = currentWord else { return }
+        // 2. Setup multiple choice options
+        guard let item = currentItem, let service = distractors else { return }
+        let correct = item.corpus
 
-        let blanked = ContextSentenceBuilder.blankedSentence(sentence: correct.exampleSentence, target: correct.word)
-        let mode = resolveQuestionMode(for: correct, hasContextSentence: blanked != nil)
-        questionModeByWordId[correct.id] = mode
-
-        self.currentQuestion = QuizQuestion(
-            word: correct,
-            mode: mode,
-            blankedSentence: blanked
-        )
-
-        // 3. Build the options (recall questions are answered by typing)
-        guard mode != .recall else {
-            self.options = []
-            return
-        }
-
-        let distractors: [Distractor]
-        if mode == .context {
-            distractors = DistractorService.shared.contextDistractors(for: correct, sentence: blanked, limit: 3)
+        let wrong: [Corpus]
+        if item.quizType == .context, let sentence = item.blankedSentence {
+            wrong = service.contextDistractors(for: correct, blankedSentence: sentence, count: 3)
         } else {
-            distractors = DistractorService.shared.meaningDistractors(for: correct, limit: 3)
+            wrong = service.meaningDistractors(for: correct, count: 3)
         }
 
-        var allOptions: [QuizOption] = [QuizOption(word: correct.word, meaning: correct.meaning)]
-        for distractor in distractors {
-            allOptions.append(QuizOption(word: distractor.word, meaning: distractor.meaning))
-        }
-        allOptions.shuffle()
-        self.options = allOptions
-    }
-
-    /// Question type for a word, honouring the session's study mode.
-    /// During the re-quiz a recall miss is re-asked as a recognition question:
-    /// the learner has just typed the spelling in the typing phase, so asking
-    /// for it again would test nothing.
-    private func resolveQuestionMode(for word: Corpus, hasContextSentence: Bool) -> StudyQuestionMode {
-        if phase == .reQuiz, let originalMode = questionModeByWordId[word.id] {
-            if originalMode == .recall {
-                return hasContextSentence ? .context : .meaning
-            }
-            return originalMode
-        }
-        return SRSScheduler.questionMode(
-            studyMode: studyMode,
-            familiar: word.familiar,
-            hasContextSentence: hasContextSentence
-        )
+        var allOptions = [QuizOption(corpusId: correct.id, word: correct.word, meaning: correct.meaning)]
+        allOptions += wrong.map { QuizOption(corpusId: $0.id, word: $0.word, meaning: $0.meaning) }
+        self.options = allOptions.shuffled()
     }
 
     /// Submits the chosen answer in Quiz mode
-    func submitAnswer(option: QuizOption) {
-        guard !isAnswered, let correct = currentWord else { return }
+    func submitAnswer(option: QuizOption, now: Date = Date()) {
+        guard !isAnswered, let item = currentItem else { return }
 
         self.selectedAnswer = option
-        register(answer: correct.word == option.word, for: correct)
-    }
-
-    /// Submits a typed answer for a recall question.
-    func submitRecallAnswer() {
-        guard !isAnswered, let correct = currentWord else { return }
-        let typed = recallInput.trimmingCharacters(in: .whitespacesAndNewlines)
-        self.recallSubmittedAnswer = typed
-        let matches = typed.lowercased() == correct.word.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        register(answer: matches, for: correct)
-    }
-
-    /// Gives up on a recall question — counts as a miss, like any other.
-    func revealRecallAnswer() {
-        guard !isAnswered, let correct = currentWord else { return }
-        self.recallSubmittedAnswer = recallInput.trimmingCharacters(in: .whitespacesAndNewlines)
-        register(answer: false, for: correct)
-    }
-
-    /// Shared grading path for every question type.
-    ///
-    /// The re-quiz phase records its answers as **session corrections**: they
-    /// prove today's correction worked, not that the word survived to the next
-    /// day, so they never raise `familiar` and never lengthen the interval.
-    private func register(answer isAnswerCorrect: Bool, for word: Corpus) {
         self.isAnswered = true
-        self.isCorrect = isAnswerCorrect
 
-        let mode = currentQuestion?.mode ?? .meaning
-        let isCorrectionRound = (phase == .reQuiz)
+        let correctFlag = option.corpusId == item.corpus.id
+        self.isCorrect = correctFlag
 
-        DatabaseManager.shared.recordAnswer(
-            corpusId: word.id,
-            mode: mode,
-            isCorrect: isAnswerCorrect,
-            isCorrection: isCorrectionRound,
-            alreadyFailedThisSession: failedWordIds.contains(word.id)
-        )
-
-        if isAnswerCorrect {
-            if isCorrectionRound {
-                correctionRounds += 1
-            } else {
-                firstTryCorrectCount += 1
-            }
+        if phase == .mainQuiz && !firstAttempted.contains(item.corpus.id) {
+            // First answer this session = long-term evidence (or a drill on a not-yet-due word).
+            firstAttempted.insert(item.corpus.id)
+            let context = database.recordFirstAnswer(corpusId: item.corpus.id, quizType: item.quizType, correct: correctFlag, now: now)
+            tally(context: context, correct: correctFlag)
         } else {
-            if !isCorrectionRound {
-                firstTryIncorrectCount += 1
-            }
-            failedWordIds.insert(word.id)
-            incorrectWords.append(word)
+            // Re-quiz after typing: "corrected today", never a long-term success.
+            database.recordCorrection(corpusId: item.corpus.id, quizType: item.quizType, correct: correctFlag, now: now)
         }
 
-        // Correct pronunciation is played either way: as reward or as
-        // corrective feedback.
-        AudioSynthesizer.shared.speak(text: word.word)
+        if !correctFlag {
+            incorrectItems.append(item)
+            correctedIds.insert(item.corpus.id)
+            summary.corrected = correctedIds.count
+        }
+        // Pronounce the correct word as feedback either way
+        AudioSynthesizer.shared.speak(text: item.corpus.word)
     }
 
     /// Progresses to the next question in Quiz mode
     func nextQuestion() {
         self.currentIndex += 1
         loadCurrentQuestion()
+    }
+
+    private func tally(context: ReviewContext, correct: Bool) {
+        switch context {
+        case .newWord:
+            summary.newStudied += 1
+            if correct { summary.newCorrect += 1 }
+        case .review:
+            summary.reviewed += 1
+            if correct { summary.reviewCorrect += 1 }
+        case .drill, .correction:
+            summary.drilled += 1
+            if correct { summary.drillCorrect += 1 }
+        }
     }
 
     // MARK: - Typing Practice Logic
@@ -331,22 +260,14 @@ class QuizSessionViewModel: ObservableObject {
         let inputClean = input.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
 
         if inputClean == targetClean {
+            // Blind listening is a recall attempt; finishing without hints counts as
+            // a recall success. Copy mode only reproduces visible text — not logged.
+            if typingMode == .blindMode {
+                database.recordCorrection(corpusId: target.id, quizType: .recall, correct: hintCount == 0)
+            }
+
             // Play TTS on successful copy
             AudioSynthesizer.shared.speak(text: target.word)
-
-            // Blind typing is a genuine recall attempt, so it is logged — but
-            // always as a same-session correction, and only counted as a hit
-            // when no hint was needed. Copy mode is transcription, not recall,
-            // so it is not logged at all.
-            if typingMode == .blindMode {
-                DatabaseManager.shared.recordAnswer(
-                    corpusId: target.id,
-                    mode: .recall,
-                    isCorrect: hintCount == 0,
-                    isCorrection: true,
-                    alreadyFailedThisSession: failedWordIds.contains(target.id)
-                )
-            }
 
             isTypingSuccess = true
 
@@ -357,7 +278,7 @@ class QuizSessionViewModel: ObservableObject {
                 self.currentIndex += 1
 
                 // Check if all typing reviews are completed
-                if self.currentIndex >= self.incorrectWords.count {
+                if self.currentIndex >= self.incorrectItems.count {
                     self.handlePhaseTransition()
                 } else {
                     // If in blind mode, auto play TTS for the next word
@@ -374,7 +295,7 @@ class QuizSessionViewModel: ObservableObject {
     private func handlePhaseTransition() {
         if phase == .mainQuiz || phase == .reQuiz {
             // If quiz phase is done:
-            if incorrectWords.isEmpty {
+            if incorrectItems.isEmpty {
                 // If there are no incorrect words, session is successfully completed!
                 self.phase = .finished
             } else {
@@ -390,8 +311,8 @@ class QuizSessionViewModel: ObservableObject {
             // Typing practice completed:
             // Move to reQuiz phase, testing only the previously incorrect words
             self.phase = .reQuiz
-            self.currentWords = incorrectWords
-            self.incorrectWords = [] // Clear buffer for new quiz session
+            self.currentItems = incorrectItems
+            self.incorrectItems = [] // Clear buffer for new quiz session
             self.currentIndex = 0
             loadCurrentQuestion()
         }

@@ -1,449 +1,270 @@
 import Foundation
 
-/// One wrong answer offered next to the correct one.
-struct Distractor: Hashable {
-    let id: String
-    let word: String
-    let meaning: String
+enum PartOfSpeech: String {
+    case verb, noun, adjective, adverb
 }
 
-/// Picks the three wrong options for a question.
-///
-/// The original app ranked candidates purely by Levenshtein distance, which
-/// produces spelling look-alikes ("adapt / adopt"). TEPS 어휘 items are not won
-/// by spelling — they are won by telling apart words that could all plausibly
-/// fill the same slot (assert / allege / contend). So candidates are now scored
-/// on several signals and spelling is only one of them.
-///
-/// The corpus has no part-of-speech, synonym or category columns (they are NULL
-/// for every row), so nothing is invented: the signals are derived from data
-/// that actually exists —
-///
-/// * **품사**: taken from the corpus `pos` column where the word book supplies
-///   one, and otherwise inferred from the shape of the Korean gloss (…하다 →
-///   동사, …한/…적인 → 형용사, …히/…게 → 부사, otherwise 명사).
-/// * **의미 근접도**: character-bigram overlap between the Korean glosses, which
-///   is what makes 저지하다 / 가로막다 compete.
-/// * **같은 단원**: the corpus is stored in the order the chapters were added,
-///   so neighbours in that order come from the same topical unit.
-/// * **철자 유사도**: kept as a lower-weighted signal (the old behaviour).
-final class DistractorService {
+/// Features derived only from data that already exists in Corpus
+/// (the `pos`/`synonym` columns are empty in the bundled DB, so part of speech
+/// is read from the Korean gloss ending: ~하다 → verb, ~한/~적인 → adjective, …).
+struct WordFeatures {
+    let corpus: Corpus
+    let pos: PartOfSpeech
+    let categories: Set<String>
+    /// Korean meaning stems ("비난하다" → "비난") used for semantic closeness.
+    let meaningStems: Set<String>
+    let primaryMeaning: String
+    let tokenCount: Int
 
-    static let shared = DistractorService()
-
-    /// Coarse part of speech guessed from the Korean gloss.
-    enum InferredPOS: String {
-        case verb, adjective, adverb, noun
+    init(corpus: Corpus) {
+        self.corpus = corpus
+        let variants = WordFeatures.meaningVariants(corpus.meaning)
+        let primary = WordFeatures.core(variants.first ?? corpus.meaning)
+        self.primaryMeaning = primary
+        self.pos = WordFeatures.inferPartOfSpeech(primary)
+        self.categories = WordFeatures.categories(from: corpus.desc)
+        self.meaningStems = Set(variants.flatMap(WordFeatures.stems))
+        self.tokenCount = corpus.word.split(whereSeparator: { $0.isWhitespace }).count
     }
 
-    struct Candidate {
-        let id: String
-        let word: String
-        let meaning: String
-        /// The corpus `pos` column when the word book supplies one. Older rows
-        /// leave it nil and the part of speech is inferred from the gloss.
-        let pos: String?
-    }
+    // MARK: Derivation helpers
 
-    private struct IndexEntry {
-        let id: String
-        let word: String
-        let lowercasedWord: String
-        let meaning: String
-        let posTags: Set<InferredPOS>
-        let glossVariants: Set<String>
-        let glossKeys: Set<String>
-        let isPhrase: Bool
-        let order: Int
-    }
-
-    /// Injected so the index can be built from a fixture in a test harness.
-    var candidateProvider: () -> [Candidate] = { DatabaseManager.shared.fetchDistractorCandidates() }
-
-    /// Immutable once built, so a question can score against a snapshot of it
-    /// without holding the lock.
-    private struct IndexSnapshot {
-        let entries: [IndexEntry]
-        let byPOS: [InferredPOS: [Int]]
-        let byGlossKey: [String: [Int]]
-        let byId: [String: Int]
-    }
-
-    private var snapshot: IndexSnapshot?
-    private let lock = NSLock()
-
-    private init() {}
-
-    /// Drops the cached index; call after words are inserted or the bundled
-    /// content is refreshed.
-    func invalidateCache() {
-        lock.lock()
-        defer { lock.unlock() }
-        snapshot = nil
-    }
-
-    // MARK: - Public API
-
-    /// Wrong *meanings* for an English → Korean question.
-    func meaningDistractors(for word: Corpus, limit: Int) -> [Distractor] {
-        distractors(for: word, sentence: nil, limit: limit, forContext: false)
-    }
-
-    /// Wrong *words* for a sentence-blank question. `sentence` is the blanked
-    /// sentence, used to reject any candidate that already appears in it.
-    func contextDistractors(for word: Corpus, sentence: String?, limit: Int) -> [Distractor] {
-        distractors(for: word, sentence: sentence, limit: limit, forContext: true)
-    }
-
-    // MARK: - Selection
-
-    private func distractors(for word: Corpus, sentence: String?, limit: Int, forContext: Bool) -> [Distractor] {
-        guard limit > 0 else { return [] }
-        let index = loadIndexIfNeeded()
-        let entries = index.entries
-        guard !entries.isEmpty else { return [] }
-
-        let targetPOS = Self.partsOfSpeech(declared: word.pos, meaning: word.meaning)
-        let targetGlossVariants = Self.glossVariants(word.meaning)
-        let targetGlossKeys = Self.glossKeys(from: targetGlossVariants)
-        let targetWord = word.word.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-        let targetIsPhrase = targetWord.contains(" ")
-        let targetOrder = index.byId[word.id].map { entries[$0].order } ?? -1
-
-        var scored: [(score: Double, entry: IndexEntry)] = []
-        scored.reserveCapacity(400)
-        var seenWords = Set<String>([targetWord])
-
-        for candidateIndex in candidateIndices(in: index, targetId: word.id, targetPOS: targetPOS, targetGlossKeys: targetGlossKeys) {
-            let entry = entries[candidateIndex]
-            if entry.id == word.id { continue }
-            if seenWords.contains(entry.lowercasedWord) { continue }
-            if entry.meaning.isEmpty || entry.word.isEmpty { continue }
-
-            // A candidate that shares a whole gloss with the target is not a
-            // wrong answer — it would be a second correct one.
-            if !entry.glossVariants.isDisjoint(with: targetGlossVariants) { continue }
-
-            if forContext {
-                // Inflectional twins ("commute" / "commuter") could genuinely
-                // fit the blank, so they are not offered as wrong answers.
-                if Self.areInflectionalTwins(targetWord, entry.lowercasedWord) { continue }
-            }
-
-            seenWords.insert(entry.lowercasedWord)
-
-            let posMatch = entry.posTags.isDisjoint(with: targetPOS) ? 0.0 : 1.0
-            let gloss = Self.glossSimilarity(targetGlossKeys, entry.glossKeys)
-            let spelling = Self.spellingSimilarity(targetWord, entry.lowercasedWord)
-            let chapter = Self.chapterProximity(targetOrder, entry.order)
-            let shape = (entry.isPhrase == targetIsPhrase) ? 1.0 : 0.0
-            let jitter = Double.random(in: 0...0.35)
-
-            let score: Double
-            if forContext {
-                score = 2.6 * posMatch
-                    + 2.2 * gloss
-                    + 1.0 * chapter
-                    + 0.8 * shape
-                    + 0.6 * spelling
-                    + jitter
-            } else {
-                // Meaning questions keep spelling similarity as a strong signal
-                // (that is the classic behaviour) but no longer rely on it alone.
-                // Near-synonymous glosses are damped down instead of boosted:
-                // an option that is almost a correct translation is unfair.
-                let cappedGloss = gloss > 0.6 ? 0.0 : gloss
-                score = 2.2 * posMatch
-                    + 1.6 * spelling
-                    + 1.2 * cappedGloss
-                    + 0.5 * chapter
-                    + jitter
-            }
-            scored.append((score, entry))
-        }
-
-        scored.sort { $0.score > $1.score }
-
-        // The "does this option already appear in the sentence?" test is the
-        // expensive one, so it runs on the ranked shortlist rather than on
-        // every candidate: a word printed in the sentence would give the
-        // answer away and must not be offered.
-        var selected: [Distractor] = []
-        for candidate in scored {
-            if selected.count >= limit { break }
-            if forContext, let sentence = sentence,
-               ContextSentenceBuilder.sentenceContains(candidate.entry.word, sentence: sentence) {
-                continue
-            }
-            selected.append(Distractor(id: candidate.entry.id, word: candidate.entry.word, meaning: candidate.entry.meaning))
-        }
-        return selected
-    }
-
-    /// Narrows the 2,600-word corpus down to a few hundred plausible candidates
-    /// before scoring, so a question stays cheap to build.
-    private func candidateIndices(in index: IndexSnapshot, targetId: String, targetPOS: Set<InferredPOS>, targetGlossKeys: Set<String>) -> [Int] {
-        var picked = Set<Int>()
-        let entryCount = index.entries.count
-
-        // 1. Semantically overlapping words (shared Korean gloss fragments).
-        for key in targetGlossKeys {
-            guard let bucket = index.byGlossKey[key] else { continue }
-            for entryIndex in bucket.prefix(40) {
-                picked.insert(entryIndex)
-            }
-            if picked.count > 160 { break }
-        }
-
-        // 2. Same part of speech.
-        for pos in targetPOS {
-            guard let bucket = index.byPOS[pos], !bucket.isEmpty else { continue }
-            let sampleSize = min(bucket.count, 200)
-            for _ in 0..<sampleSize {
-                picked.insert(bucket[Int.random(in: 0..<bucket.count)])
-            }
-        }
-
-        // 3. A little noise from the whole corpus so options are not always
-        //    drawn from the same neighbourhood.
-        if entryCount > 0 {
-            for _ in 0..<60 {
-                picked.insert(Int.random(in: 0..<entryCount))
-            }
-        }
-
-        if let selfIndex = index.byId[targetId] {
-            picked.remove(selfIndex)
-        }
-        return Array(picked)
-    }
-
-    // MARK: - Index
-
-    @discardableResult
-    private func loadIndexIfNeeded() -> IndexSnapshot {
-        lock.lock()
-        let cached = snapshot
-        lock.unlock()
-        if let cached = cached { return cached }
-
-        let candidates = candidateProvider()
-        var built: [IndexEntry] = []
-        built.reserveCapacity(candidates.count)
-        var byPOS: [InferredPOS: [Int]] = [:]
-        var byGloss: [String: [Int]] = [:]
-        var byId: [String: Int] = [:]
-
-        for (order, candidate) in candidates.enumerated() {
-            let variants = Self.glossVariants(candidate.meaning)
-            let keys = Self.glossKeys(from: variants)
-            let pos = Self.partsOfSpeech(declared: candidate.pos, meaning: candidate.meaning)
-            let trimmedWord = candidate.word.trimmingCharacters(in: .whitespacesAndNewlines)
-            let entry = IndexEntry(
-                id: candidate.id,
-                word: trimmedWord,
-                lowercasedWord: trimmedWord.lowercased(),
-                meaning: candidate.meaning,
-                posTags: pos,
-                glossVariants: variants,
-                glossKeys: keys,
-                isPhrase: trimmedWord.contains(" "),
-                order: order
-            )
-            let index = built.count
-            built.append(entry)
-            byId[entry.id] = index
-            for tag in pos {
-                byPOS[tag, default: []].append(index)
-            }
-            for key in keys {
-                byGloss[key, default: []].append(index)
-            }
-        }
-
-        let fresh = IndexSnapshot(entries: built, byPOS: byPOS, byGlossKey: byGloss, byId: byId)
-        lock.lock()
-        snapshot = fresh
-        lock.unlock()
-        return fresh
-    }
-
-    // MARK: - Korean gloss analysis
-
-    /// Splits a stored meaning into its variants, ignoring the "﹒" separators
-    /// that appear inside parentheses (they are word separators there).
-    static func glossVariants(_ meaning: String) -> Set<String> {
+    static func meaningVariants(_ meaning: String) -> [String] {
         var variants: [String] = []
         var current = ""
         var depth = 0
-        for character in meaning {
-            if character == "(" || character == "（" {
-                depth += 1
-            } else if character == ")" || character == "）" {
-                depth = max(0, depth - 1)
-            }
-            if character == "﹒" && depth == 0 {
+        for ch in meaning {
+            if ch == "(" || ch == "（" { depth += 1 }
+            else if ch == ")" || ch == "）" { depth = max(0, depth - 1) }
+            if ch == "﹒" && depth == 0 {
                 variants.append(current)
                 current = ""
             } else {
-                current.append(character)
+                current.append(ch)
             }
         }
         variants.append(current)
-
-        var result = Set<String>()
-        for variant in variants {
-            let normalized = normalizeGloss(variant)
-            if !normalized.isEmpty {
-                result.insert(normalized)
-            }
-        }
-        return result
+        return variants.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
     }
 
-    /// Strips parenthesised qualifiers, spacing and particles so that
-    /// "(강하게) 주장하다" and "주장하다" compare equal.
-    static func normalizeGloss(_ variant: String) -> String {
-        var stripped = ""
-        var depth = 0
-        for character in variant {
-            if character == "(" || character == "（" {
-                depth += 1
-                continue
-            }
-            if character == ")" || character == "）" {
-                depth = max(0, depth - 1)
-                continue
-            }
-            if depth == 0 {
-                stripped.append(character)
-            }
-        }
-        let removable = CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: "~-–—·,.;:'\"!?"))
-        let filtered = String(String.UnicodeScalarView(stripped.unicodeScalars.filter { !removable.contains($0) }))
-        return filtered
+    /// Strips parenthesised notes and alternatives: "(공개적으로) 맹렬히 비난하다; 혹평" → "맹렬히 비난하다".
+    static func core(_ variant: String) -> String {
+        let noParens = variant.replacingOccurrences(of: "[\\(（][^\\)）]*[\\)）]", with: "", options: .regularExpression)
+        let first = noParens.split(whereSeparator: { $0 == ";" || $0 == "," }).first.map(String.init) ?? noParens
+        return first.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespaces)
     }
 
-    /// The stem of a gloss plus its character bigrams — the fragments that make
-    /// two Korean definitions look alike.
-    static func glossKeys(from variants: Set<String>) -> Set<String> {
-        var keys = Set<String>()
-        for variant in variants {
-            let stem = stripGlossSuffix(variant)
-            guard stem.count >= 2 else {
-                if !stem.isEmpty { keys.insert(stem) }
-                continue
-            }
-            keys.insert(stem)
-            let characters = Array(stem)
-            for index in 0..<(characters.count - 1) {
-                keys.insert(String(characters[index...(index + 1)]))
-            }
-        }
-        return keys
+    static func inferPartOfSpeech(_ gloss: String) -> PartOfSpeech {
+        guard let last = gloss.last else { return .noun }
+        if last == "다" { return .verb }
+        if gloss.count >= 2 && (last == "히" || last == "게") { return .adverb }
+        // "~에 관계없이", "의도적으로", "~에도 불구하고": adverbial glosses
+        let adverbialEndings = ["없이", "같이", "으로", "불구하고", "하여"]
+        if gloss.count >= 3 && adverbialEndings.contains(where: gloss.hasSuffix) { return .adverb }
+        let adjectiveEndings = ["하는", "되는", "있는", "없는", "적인", "스러운", "로운", "러운", "같은", "않은", "해진", "어진", "아진"]
+        if adjectiveEndings.contains(where: gloss.hasSuffix) { return .adjective }
+        let nounsEndingLikeAdjectives = ["권한", "제한", "기한", "시한", "주인", "원인", "개인", "부인", "요인", "증인", "상인", "군인", "노인", "죄인", "시인", "행운", "기운"]
+        if nounsEndingLikeAdjectives.contains(where: gloss.hasSuffix) { return .noun }
+        if gloss.count >= 2 && "한인운는은된던의".contains(last) { return .adjective }
+        return .noun
     }
 
-    private static let glossSuffixes = ["시키다", "스러운", "로운", "하다", "되다", "적인", "하는", "되는", "이다", "한", "의", "적", "을", "를", "이", "가"]
-
-    static func stripGlossSuffix(_ variant: String) -> String {
-        var stem = variant
-        for suffix in glossSuffixes where stem.hasSuffix(suffix) && stem.count > suffix.count + 1 {
-            stem = String(stem.dropLast(suffix.count))
-            break
-        }
-        return stem
+    static func categories(from desc: String?) -> Set<String> {
+        guard let desc, let range = desc.range(of: "Category:") else { return [] }
+        let tail = desc[range.upperBound...]
+        let field = tail.split(separator: "|").first.map(String.init) ?? ""
+        return Set(field.split(separator: "/")
+            .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
+            .filter { !$0.isEmpty && $0 != "general" })
     }
 
-    /// Part of speech for a word: the corpus column when it has one, falling
-    /// back to guessing from the Korean gloss. Declared values come from the
-    /// word book ("adjective, noun") and are far more reliable than the guess.
-    static func partsOfSpeech(declared: String?, meaning: String) -> Set<InferredPOS> {
-        if let declared = declared, !declared.isEmpty {
-            var tags = Set<InferredPOS>()
-            for part in declared.split(separator: ",") {
-                if let tag = InferredPOS(rawValue: part.trimmingCharacters(in: .whitespaces).lowercased()) {
-                    tags.insert(tag)
+    private static let stemSuffixes = ["시키다", "스러운", "하다", "되다", "하는", "되는", "적인", "적으로", "하게", "히", "한", "된", "인", "다"]
+    private static let stopStems: Set<String> = ["것", "수", "등", "일", "하", "되", "있", "없", "같", "사람"]
+
+    static func stems(_ variant: String) -> [String] {
+        let text = core(variant)
+        return text.split(whereSeparator: { $0 == " " || $0 == "·" || $0 == "/" }).compactMap { raw in
+            var token = String(raw).trimmingCharacters(in: CharacterSet(charactersIn: "~-=…"))
+            for suffix in stemSuffixes where token.count > suffix.count && token.hasSuffix(suffix) {
+                token = String(token.dropLast(suffix.count))
+                break
+            }
+            return token.count >= 2 && !stopStems.contains(token) ? token : nil
+        }
+    }
+}
+
+/// Chooses wrong options. Context questions prefer plausible competitors
+/// (same part of speech → related meaning → same category → similar form),
+/// with spelling similarity and randomness only as fallbacks.
+final class DistractorService {
+    private let features: [WordFeatures]
+    private let byId: [String: WordFeatures]
+
+    init(pool: [Corpus]) {
+        let features = pool.map(WordFeatures.init)
+        self.features = features
+        self.byId = Dictionary(features.map { ($0.corpus.id, $0) }, uniquingKeysWith: { first, _ in first })
+    }
+
+    func features(for corpus: Corpus) -> WordFeatures {
+        byId[corpus.id] ?? WordFeatures(corpus: corpus)
+    }
+
+    // MARK: Meaning questions (choose the Korean meaning)
+
+    /// Same-POS meanings so the answer cannot be picked from the gloss's
+    /// grammatical form alone; one spelling-confusable word keeps the original
+    /// "look-alike" training; near-synonym glosses are excluded to avoid two correct options.
+    func meaningDistractors(for target: Corpus, count: Int) -> [Corpus] {
+        let t = features(for: target)
+        var pool = candidates(for: t) { $0.pos == t.pos }
+        if pool.count < count { pool = candidates(for: t) { _ in true } }
+
+        var chosen: [WordFeatures] = []
+        if let lookalike = pool
+            .shuffled().prefix(80)
+            .min(by: { spellingDistance(t, $0) < spellingDistance(t, $1) }) {
+            chosen.append(lookalike)
+        }
+        let sameCategory = pool.filter { !t.categories.isEmpty && !$0.categories.isDisjoint(with: t.categories) }
+        if let categoryPick = sameCategory.shuffled().first(where: { c in !chosen.contains { $0.corpus.id == c.corpus.id } }) {
+            chosen.append(categoryPick)
+        }
+        fill(&chosen, from: pool.shuffled(), target: t, count: count)
+        return chosen.prefix(count).map(\.corpus)
+    }
+
+    // MARK: Context questions (choose the English word for the blank)
+
+    func contextDistractors(for target: Corpus, blankedSentence: String, count: Int) -> [Corpus] {
+        let t = features(for: target)
+        let isPhrase = t.tokenCount > 1
+        // Options must share the target's shape (single word vs phrase) — otherwise
+        // the odd one out is guessable without reading the sentence.
+        let sameShape: (WordFeatures) -> Bool = { ($0.tokenCount > 1) == isPhrase }
+        // A word already present elsewhere in the sentence would be a giveaway.
+        // Cheap substring check first; the regex only runs for plausible hits.
+        let lowerSentence = blankedSentence.lowercased()
+        let notInSentence: (WordFeatures) -> Bool = { c in
+            let head = c.corpus.word.lowercased().split(separator: " ").first.map { String($0.prefix(4)) } ?? ""
+            return !lowerSentence.contains(head) || !ContextBlanker.contains(c.corpus.word, in: blankedSentence)
+        }
+
+        var pool = candidates(for: t) { sameShape($0) && $0.pos == t.pos && notInSentence($0) }
+        if pool.count < count { pool = candidates(for: t) { sameShape($0) && notInSentence($0) } }
+        if pool.count < count { pool = candidates(for: t) { notInSentence($0) } }
+
+        var chosen: [WordFeatures] = []
+
+        // 1. One semantic competitor: related meaning, but not a near-synonym
+        //    (a true synonym would make the question ambiguous).
+        let related = pool
+            .map { ($0, $0.meaningStems.intersection(t.meaningStems).count) }
+            .filter { $0.1 > 0 }
+            .sorted { $0.1 > $1.1 }
+            .prefix(4)
+            .map(\.0)
+        if let pick = related.shuffled().first { chosen.append(pick) }
+
+        // 2. One from the same subject category (Business, Legal, …) when known.
+        let sameCategory = pool.filter { !t.categories.isEmpty && !$0.categories.isDisjoint(with: t.categories) }
+        if let pick = sameCategory.shuffled().first(where: { c in !chosen.contains { $0.corpus.id == c.corpus.id } }) {
+            chosen.append(pick)
+        }
+
+        // 3. Phrases: prefer ones built on the same frame ("regardless of" ↔
+        //    "in spite of", "take action" ↔ "take notes"), which read as grammatical
+        //    in the blank and must be told apart by meaning.
+        if isPhrase {
+            let frame = phraseFrame(target.word)
+            let sameFrame = pool.filter { c in
+                let other = phraseFrame(c.corpus.word)
+                return (frame.first != nil && other.first == frame.first) || (frame.last != nil && other.last == frame.last)
+            }
+            var added = 0
+            for pick in sameFrame.shuffled() where chosen.count < count && added < 2 {
+                if !chosen.contains(where: { $0.corpus.id == pick.corpus.id || isNearDuplicate($0, pick) }) {
+                    chosen.append(pick)
+                    added += 1
                 }
             }
-            if !tags.isEmpty { return tags }
         }
-        return inferPOS(fromMeaning: meaning)
+
+        // 4. Fill with same-POS words, nudged toward similar length/form, then random.
+        let ranked = pool.shuffled().prefix(120).sorted {
+            formScore(t, $0) < formScore(t, $1)
+        }
+        fill(&chosen, from: Array(ranked.prefix(12)).shuffled() + pool.shuffled(), target: t, count: count)
+        return chosen.prefix(count).map(\.corpus)
     }
 
-    /// Part of speech guessed from the ending of each Korean gloss variant.
-    static func inferPOS(fromMeaning meaning: String) -> Set<InferredPOS> {
-        var tags = Set<InferredPOS>()
-        for variant in glossVariants(meaning) {
-            guard variant.count >= 2 else { continue }
-            if variant.hasSuffix("하다") || variant.hasSuffix("되다") || variant.hasSuffix("시키다") || variant.hasSuffix("이다") || variant.hasSuffix("다") {
-                tags.insert(.verb)
-            } else if variant.hasSuffix("적인") || variant.hasSuffix("스러운") || variant.hasSuffix("로운") || variant.hasSuffix("운")
-                        || variant.hasSuffix("한") || variant.hasSuffix("은") || variant.hasSuffix("는") || variant.hasSuffix("인") {
-                tags.insert(.adjective)
-            } else if variant.hasSuffix("히") || variant.hasSuffix("게") || variant.hasSuffix("으로") || variant.hasSuffix("로") {
-                tags.insert(.adverb)
-            } else {
-                tags.insert(.noun)
+    // MARK: Shared helpers
+
+    private func candidates(for target: WordFeatures, where predicate: (WordFeatures) -> Bool) -> [WordFeatures] {
+        features.filter { c in
+            c.corpus.id != target.corpus.id
+                && !c.corpus.meaning.isEmpty
+                && !isNearDuplicate(target, c)
+                && predicate(c)
+        }
+    }
+
+    /// Same headword/lemma or practically the same gloss → would be a second correct answer.
+    private func isNearDuplicate(_ a: WordFeatures, _ b: WordFeatures) -> Bool {
+        let wa = a.corpus.word.lowercased(), wb = b.corpus.word.lowercased()
+        if wa == wb || wa.hasPrefix(wb + " ") || wb.hasPrefix(wa + " ") { return true }
+        if !a.primaryMeaning.isEmpty && a.primaryMeaning == b.primaryMeaning { return true }
+        let union = a.meaningStems.union(b.meaningStems).count
+        guard union > 0 else { return false }
+        let jaccard = Double(a.meaningStems.intersection(b.meaningStems).count) / Double(union)
+        return jaccard >= 0.5
+    }
+
+    private func fill(_ chosen: inout [WordFeatures], from source: [WordFeatures], target: WordFeatures, count: Int) {
+        for candidate in source where chosen.count < count {
+            let duplicate = chosen.contains {
+                $0.corpus.id == candidate.corpus.id || isNearDuplicate($0, candidate)
             }
+            if !duplicate { chosen.append(candidate) }
         }
-        if tags.isEmpty { tags.insert(.noun) }
-        return tags
     }
 
-    // MARK: - Similarity signals
+    private static let frameWords: Set<String> = [
+        "of", "to", "on", "in", "with", "up", "out", "off", "for", "at", "down", "over", "away", "back", "into", "about",
+        "take", "make", "give", "get", "put", "come", "go", "run", "keep", "bring", "turn", "set", "break", "hold", "pull", "play",
+    ]
 
-    static func glossSimilarity(_ lhs: Set<String>, _ rhs: Set<String>) -> Double {
-        guard !lhs.isEmpty, !rhs.isEmpty else { return 0 }
-        let shared = lhs.intersection(rhs).count
-        guard shared > 0 else { return 0 }
-        return min(1.0, Double(shared) / Double(min(lhs.count, rhs.count)))
+    /// Leading verb / trailing particle of a phrase, when they are common frame words.
+    private func phraseFrame(_ word: String) -> (first: String?, last: String?) {
+        let tokens = word.lowercased().split(separator: " ").map(String.init).filter { $0 != "~" }
+        guard tokens.count > 1 else { return (nil, nil) }
+        let first = tokens.first.flatMap { Self.frameWords.contains($0) ? $0 : nil }
+        let last = tokens.last.flatMap { Self.frameWords.contains($0) ? $0 : nil }
+        return (first, last)
     }
 
-    static func spellingSimilarity(_ lhs: String, _ rhs: String) -> Double {
-        let longest = max(lhs.count, rhs.count)
-        guard longest > 0 else { return 0 }
-        let distance = levenshteinDistance(lhs, rhs)
-        return max(0.0, 1.0 - Double(distance) / Double(longest))
+    private func formScore(_ target: WordFeatures, _ candidate: WordFeatures) -> Int {
+        abs(target.corpus.word.count - candidate.corpus.word.count)
     }
 
-    /// Words added close together belong to the same chapter of the word book,
-    /// which is the closest thing this corpus has to a category.
-    static func chapterProximity(_ lhs: Int, _ rhs: Int) -> Double {
-        guard lhs >= 0, rhs >= 0 else { return 0 }
-        let distance = abs(lhs - rhs)
-        return 1.0 / (1.0 + Double(distance) / 25.0)
+    private func spellingDistance(_ a: WordFeatures, _ b: WordFeatures) -> Int {
+        levenshtein(a.corpus.word.lowercased(), b.corpus.word.lowercased())
     }
 
-    /// True for pairs like "commute"/"commuting" where one is (nearly) a
-    /// prefix of the other — such an option may genuinely fit a blank.
-    static func areInflectionalTwins(_ lhs: String, _ rhs: String) -> Bool {
-        if lhs == rhs { return true }
-        let shorter = lhs.count <= rhs.count ? lhs : rhs
-        let longer = lhs.count <= rhs.count ? rhs : lhs
-        guard shorter.count >= 4 else { return levenshteinDistance(lhs, rhs) <= 1 }
-        if longer.hasPrefix(shorter) && longer.count - shorter.count <= 3 { return true }
-        return levenshteinDistance(lhs, rhs) <= 1
-    }
-
-    /// Minimum number of single-character edits between two strings.
-    static func levenshteinDistance(_ lhs: String, _ rhs: String) -> Int {
-        let source = Array(lhs)
-        let target = Array(rhs)
-        if source.isEmpty { return target.count }
-        if target.isEmpty { return source.count }
-
-        var previous = Array(0...target.count)
-        var current = [Int](repeating: 0, count: target.count + 1)
-
-        for i in 0..<source.count {
-            current[0] = i + 1
-            for j in 0..<target.count {
-                current[j + 1] = source[i] == target[j]
-                    ? previous[j]
-                    : min(previous[j], previous[j + 1], current[j]) + 1
+    private func levenshtein(_ s1: String, _ s2: String) -> Int {
+        let a = Array(s1), b = Array(s2)
+        guard !a.isEmpty else { return b.count }
+        guard !b.isEmpty else { return a.count }
+        var last = Array(0...b.count)
+        for i in 1...a.count {
+            var current = [i] + Array(repeating: 0, count: b.count)
+            for j in 1...b.count {
+                current[j] = a[i - 1] == b[j - 1] ? last[j - 1] : min(last[j - 1], last[j], current[j - 1]) + 1
             }
-            previous = current
+            last = current
         }
-        return previous[target.count]
+        return last[b.count]
     }
 }

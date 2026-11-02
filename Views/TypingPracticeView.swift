@@ -81,11 +81,7 @@ struct TypingPracticeView: View {
                 .padding(.horizontal, 16)
 
             // Nuance Example (If exists)
-            // In blind mode the sentence is masked through ContextSentenceBuilder,
-            // which also catches inflected forms ("commuting" for "commute") —
-            // a plain replacingOccurrences left those visible and leaked the
-            // spelling the learner is supposed to reproduce.
-            if let displayExample = viewModel.typingExampleSentence {
+            if let example = target.exampleSentence, !example.isEmpty {
                 Divider().background(Color.white.opacity(0.08))
 
                 VStack(spacing: 6) {
@@ -93,6 +89,12 @@ struct TypingPracticeView: View {
                         .font(.caption2)
                         .fontWeight(.bold)
                         .foregroundColor(Color(hex: "D946EF").opacity(0.7))
+
+                    // Mask the target word (including inflected forms like "began") in blind mode
+                    let displayExample = viewModel.typingMode == .copyMode ?
+                        example :
+                        (ContextBlanker.blanked(target.word, in: example)
+                            ?? example.replacingOccurrences(of: target.word, with: ContextBlanker.blank, options: .caseInsensitive))
 
                     Text(displayExample)
                         .font(.subheadline)
@@ -102,6 +104,16 @@ struct TypingPracticeView: View {
                         .multilineTextAlignment(.center)
                         .lineSpacing(4)
                         .fixedSize(horizontal: false, vertical: true)
+
+                    // The meaning is already on the card, so the translation reveals no spelling.
+                    if let translation = viewModel.exampleTranslation(for: target) {
+                        Text(translation)
+                            .font(.footnote)
+                            .foregroundColor(.white.opacity(0.6))
+                            .multilineTextAlignment(.center)
+                            .lineSpacing(3)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
         }

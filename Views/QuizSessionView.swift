@@ -4,12 +4,9 @@ struct QuizSessionView: View {
     @StateObject private var viewModel = QuizSessionViewModel()
     @Environment(\.presentationMode) var presentationMode
     
-    let isHardWords: Bool
-    /// Which question types this session may ask (dashboard setting).
-    var studyMode: StudyMode = .mixed
-    /// How many brand-new words this session may introduce (dashboard setting).
-    var newWordsPerSession: Int = SRSConfiguration.default.newWordsPerSession
-    
+    let mode: StudyMode
+    var extraNewWords: Int = 0
+
     var body: some View {
         ZStack {
             // Dark Background
@@ -41,11 +38,7 @@ struct QuizSessionView: View {
             }
         }
         .onAppear {
-            viewModel.startSession(
-                isHardWords: isHardWords,
-                studyMode: studyMode,
-                newWordsPerSession: newWordsPerSession
-            )
+            viewModel.startSession(mode: mode, extraNewWords: extraNewWords)
         }
     }
     
@@ -119,15 +112,15 @@ struct QuizSessionView: View {
     private var phaseTitle: String {
         switch viewModel.phase {
         case .mainQuiz:
-            // The session is exactly as long as the due + new words allow, so
-            // the header reports the real composition instead of "100 words".
-            return viewModel.isHardWordsSession
-                ? "난공불락 집중 학습"
-                : "1단계: 복습 \(viewModel.dueWordsCount) · 신규 \(viewModel.newWordsCount)"
+            switch viewModel.mode {
+            case .hardWords: return "난공불락 집중 학습"
+            case .context: return "1단계: TEPS 문맥 (복습 \(viewModel.plannedDueCount) · 신규 \(viewModel.plannedNewCount))"
+            case .meaning: return "1단계: 오늘의 퀴즈 (복습 \(viewModel.plannedDueCount) · 신규 \(viewModel.plannedNewCount))"
+            }
         case .typingReview:
             return "2단계: 오답 따라 쓰기"
         case .reQuiz:
-            return "3단계: 오답 재퀴즈 (오늘 교정)"
+            return "3단계: 오답 재퀴즈"
         case .finished:
             return "완료"
         }
@@ -162,9 +155,9 @@ struct QuizSessionView: View {
     private var totalItemsCount: Int {
         switch viewModel.phase {
         case .mainQuiz, .reQuiz:
-            return viewModel.currentWords.count
+            return viewModel.currentItems.count
         case .typingReview:
-            return viewModel.incorrectWords.count
+            return viewModel.incorrectItems.count
         case .finished:
             return 0
         }
@@ -176,27 +169,6 @@ struct QuizSessionView: View {
 struct SessionCompletedView: View {
     @ObservedObject var viewModel: QuizSessionViewModel
     let onDismiss: () -> Void
-
-    private var completionSubtitle: String {
-        if viewModel.isHardWordsSession {
-            return "자주 틀리던 단어를 완벽히 정복했습니다."
-        }
-        if viewModel.totalSessionWordsCount == 0 {
-            return "지금 복습할 단어가 없습니다. 예정된 복습일에 다시 만나요!"
-        }
-        return "오늘의 \(viewModel.totalSessionWordsCount)문항을 모두 마쳤습니다!"
-    }
-
-    private func summaryRow(title: String, value: String, color: Color) -> some View {
-        HStack {
-            Text(title)
-                .foregroundColor(.gray)
-            Spacer()
-            Text(value)
-                .fontWeight(.bold)
-                .foregroundColor(color)
-        }
-    }
     
     var body: some View {
         VStack(spacing: 32) {
@@ -220,62 +192,51 @@ struct SessionCompletedView: View {
             
             // Text Header
             VStack(spacing: 8) {
-                Text("학습 완료!")
+                Text(isEmptySession ? "오늘 학습 완료" : "학습 완료!")
                     .font(.system(size: 32, weight: .black, design: .rounded))
                     .foregroundColor(.white)
-                
-                Text(completionSubtitle)
+
+                Text(headline)
                     .font(.subheadline)
                     .foregroundColor(.gray)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 32)
             }
-            
+
             // Statistics Summary Card (Glassmorphism)
-            VStack(spacing: 16) {
-                summaryRow(title: "총 학습 문항", value: "\(viewModel.totalSessionWordsCount)개", color: .white)
-
-                if !viewModel.isHardWordsSession {
+            if !isEmptySession {
+                let summary = viewModel.summary
+                VStack(spacing: 16) {
+                    summaryRow("총 학습 단어", "\(viewModel.totalSessionWordsCount)개")
                     Divider().background(Color.white.opacity(0.08))
-                    summaryRow(
-                        title: "구성",
-                        value: "복습 \(viewModel.dueWordsCount) · 신규 \(viewModel.newWordsCount)",
-                        color: Color(hex: "818CF8")
-                    )
+                    if summary.reviewed > 0 {
+                        summaryRow("복습 (첫 시도 정답)", "\(summary.reviewCorrect) / \(summary.reviewed)")
+                    }
+                    if summary.newStudied > 0 {
+                        summaryRow("신규 (첫 시도 정답)", "\(summary.newCorrect) / \(summary.newStudied)")
+                    }
+                    if summary.drilled > 0 {
+                        summaryRow("집중 훈련 정답", "\(summary.drillCorrect) / \(summary.drilled)")
+                    }
+                    summaryRow("오답 → 오늘 교정 완료", "\(summary.corrected)개",
+                               color: summary.corrected == 0 ? Color(hex: "34D399") : Color(hex: "FBBF24"))
+                    if summary.corrected > 0 {
+                        Text("교정한 단어는 내일 다시 확인합니다. 같은 날 재퀴즈 정답은 장기 기억으로 치지 않아요.")
+                            .font(.caption2)
+                            .foregroundColor(.gray)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
                 }
-
-                Divider().background(Color.white.opacity(0.08))
-
-                summaryRow(
-                    title: "첫 시도 정답",
-                    value: "\(viewModel.firstTryCorrectCount) / \(viewModel.firstTryCorrectCount + viewModel.firstTryIncorrectCount)",
-                    color: Color(hex: "34D399")
+                .padding(20)
+                .background(Color.white.opacity(0.03))
+                .cornerRadius(20)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
                 )
-
-                Divider().background(Color.white.opacity(0.08))
-
-                summaryRow(
-                    title: "오늘 교정 완료",
-                    value: "\(viewModel.correctionRounds)회",
-                    color: Color(hex: "D946EF")
-                )
-
-                // The distinction that keeps the numbers honest.
-                Text("교정은 '오늘 고쳤다'는 뜻이며, 장기 기억 확인은 다음 복습일에 이루어집니다.")
-                    .font(.caption2)
-                    .foregroundColor(.gray)
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 32)
             }
-            .padding(20)
-            .background(Color.white.opacity(0.03))
-            .cornerRadius(20)
-            .overlay(
-                RoundedRectangle(cornerRadius: 20)
-                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
-            )
-            .padding(.horizontal, 32)
-            
+
             Spacer()
             
             // Confirm Button
@@ -298,6 +259,32 @@ struct SessionCompletedView: View {
             }
             .padding(.horizontal, 32)
             .padding(.bottom, 24)
+        }
+    }
+
+    private var isEmptySession: Bool { viewModel.totalSessionWordsCount == 0 }
+
+    private var headline: String {
+        if isEmptySession {
+            return viewModel.isHardWordsSession
+                ? "집중 훈련할 난공불락 단어가 없습니다."
+                : "오늘 복습할 단어와 신규 한도를 모두 마쳤습니다.\n더 하고 싶다면 대시보드에서 신규 단어를 추가로 학습하세요."
+        }
+        switch viewModel.mode {
+        case .hardWords: return "자주 틀리던 단어를 집중 훈련했습니다."
+        case .context: return "TEPS 문맥 세션 \(viewModel.totalSessionWordsCount)문제를 마쳤습니다."
+        case .meaning: return "오늘의 세션 \(viewModel.totalSessionWordsCount)문제를 마쳤습니다."
+        }
+    }
+
+    private func summaryRow(_ title: String, _ value: String, color: Color = .white) -> some View {
+        HStack {
+            Text(title)
+                .foregroundColor(.gray)
+            Spacer()
+            Text(value)
+                .fontWeight(.bold)
+                .foregroundColor(color)
         }
     }
 }
