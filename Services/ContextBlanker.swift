@@ -47,7 +47,10 @@ enum ContextBlanker {
     private static let gap = "(?:\\s+[\\w'’,\\-]+){1,4}\\s+"
     private static let possessive = "(?:my|your|his|her|its|our|their|one['’]s|someone['’]s|[A-Za-z]+['’]s)"
     private static let reflexive = "(?:myself|yourself|himself|herself|itself|ourselves|yourselves|themselves|oneself)"
-    private static let placeholders: Set<String> = ["~", "someone", "somebody", "something", "sb", "sth", "a person"]
+    // "-ing" is how the word books write "a gerund goes here" ("worth -ing",
+    // "end up -ing"). It is a slot, not a literal, so it is skipped like "~";
+    // without this those entries can never be blanked at all.
+    private static let placeholders: Set<String> = ["~", "someone", "somebody", "something", "sb", "sth", "a person", "-ing"]
 
     private static func regex(for word: String) -> NSRegularExpression? {
         cacheLock.lock()

@@ -18,7 +18,8 @@ _GAP = r"(?:\s+[\w'’,\-]+){1,4}\s+"
 _POSSESSIVE = r"(?:my|your|his|her|its|our|their|one['’]s|someone['’]s|[A-Za-z]+['’]s)"
 _REFLEXIVE = (r"(?:myself|yourself|himself|herself|itself|ourselves|yourselves|"
               r"themselves|oneself)")
-_PLACEHOLDERS = {"~", "someone", "somebody", "something", "sb", "sth", "a person"}
+_PLACEHOLDERS = {"~", "someone", "somebody", "something", "sb", "sth", "a person",
+                 "-ing"}
 
 # 단어 목록에 실제로 나오는 불규칙 동사들 (Swift 쪽 irregularForms 와 동일)
 IRREGULAR_FORMS = {
