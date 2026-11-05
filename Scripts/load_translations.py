@@ -71,6 +71,12 @@ def main():
                 "INSERT INTO ExampleTranslation (corpusId, translation) VALUES (?, ?) "
                 "ON CONFLICT(corpusId) DO UPDATE SET translation = excluded.translation",
                 good)
+            # The app decides whether to re-sync bundled content from the Corpus
+            # rows' updatedAt, so a translation-only change has to move it too or
+            # devices keep the translations they already have.
+            conn.executemany(
+                "UPDATE Corpus SET updatedAt = strftime('%Y-%m-%dT%H:%M:%SZ','now') "
+                "WHERE id = ?", [(cid,) for cid, _ in good])
 
     total, = conn.execute(
         "SELECT COUNT(*) FROM Corpus c JOIN ExampleTranslation t ON t.corpusId = c.id "

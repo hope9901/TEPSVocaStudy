@@ -24,8 +24,12 @@ class DatabaseManager {
     // Bump this whenever the bundled DB's word content changes (typo fixes,
     // new words, …). Existing installs then sync the new content into their
     // Documents copy on next launch while keeping familiar/scheduledAt.
-    private let bundledContentVersion = 7
+    private let bundledContentVersion = 8
     private let bundledContentVersionKey = "bundledContentVersion"
+    // The version is bumped by hand, and content ships far more often than it
+    // gets bumped. This stamp is read from the bundled DB itself, so a missed
+    // bump no longer leaves a device on old examples for good.
+    private let bundledContentStampKey = "bundledContentStamp"
 
     // Learning-schema version, stored inside the DB (StudyMeta table) so a DB file
     // copied between installs via the Files app carries its own state.
@@ -98,16 +102,20 @@ class DatabaseManager {
 
     /// Syncs word content (spelling, meanings, examples, deletions) from the
     /// bundled DB into the user's Documents copy without touching learning
-    /// progress (familiar, scheduledAt). Runs once per bundledContentVersion bump.
+    /// progress (familiar, scheduledAt). Runs whenever the bundled content differs
+    /// from what this install last took.
     private func migrateBundledContentIfNeeded(freshCopy: Bool) {
         guard db != nil else { return }
 
-        // A fresh copy already contains the latest content — just record the version.
-        if freshCopy || defaults.integer(forKey: bundledContentVersionKey) >= bundledContentVersion {
+        // A fresh copy already contains the latest content — just record it.
+        if freshCopy {
+            recordBundledContent(stamp: contentStamp(of: ""))
+            return
+        }
+        guard let bundleURL = bundledURL else {
             defaults.set(bundledContentVersion, forKey: bundledContentVersionKey)
             return
         }
-        guard let bundleURL = bundledURL else { return }
 
         // Attach the bundled DB read-only next to the Documents DB
         var attachStmt: OpaquePointer?
@@ -117,6 +125,17 @@ class DatabaseManager {
         sqlite3_finalize(attachStmt)
         guard attached else {
             print("Migration: failed to attach bundled DB.")
+            return
+        }
+
+        // Skip only when this install already took *this* content. Comparing the
+        // version alone was not enough: the word list, every example sentence and
+        // every translation shipped under version 7, so an install that took the
+        // first of those builds kept its half-empty examples through all the rest.
+        let stamp = contentStamp(of: "bundled.")
+        if defaults.integer(forKey: bundledContentVersionKey) >= bundledContentVersion,
+           let stamp = stamp, defaults.string(forKey: bundledContentStampKey) == stamp {
+            sqlite3_exec(db, "DETACH DATABASE bundled;", nil, nil, nil)
             return
         }
 
@@ -160,7 +179,7 @@ class DatabaseManager {
 
         var errMsg: UnsafeMutablePointer<CChar>?
         if sqlite3_exec(db, migrationSQL, nil, nil, &errMsg) == SQLITE_OK {
-            defaults.set(bundledContentVersion, forKey: bundledContentVersionKey)
+            recordBundledContent(stamp: stamp)
             print("Migration: bundled content v\(bundledContentVersion) synced (progress preserved).")
         } else {
             let message = errMsg.map { String(cString: $0) } ?? "unknown"
@@ -172,6 +191,36 @@ class DatabaseManager {
 
         // Refresh cached vocabulary statistics after content changes
         updateVocabularyStatistics()
+    }
+
+    private func recordBundledContent(stamp: String?) {
+        defaults.set(bundledContentVersion, forKey: bundledContentVersionKey)
+        if let stamp = stamp {
+            defaults.set(stamp, forKey: bundledContentStampKey)
+        }
+    }
+
+    /// A cheap summary of everything the migration copies: the Corpus rows and
+    /// their newest updatedAt, plus the size of the translation table. It has to
+    /// cover both, or a build that only changed translations would look identical.
+    /// `schema` is "" for the local DB and "bundled." for the attached bundle.
+    private func contentStamp(of schema: String) -> String? {
+        guard let db = db else { return nil }
+        var stmt: OpaquePointer?
+        var stamp: String?
+        let query = """
+            SELECT (SELECT COUNT(*) FROM \(schema)Corpus)
+                || '/' || (SELECT IFNULL(MAX(updatedAt), '') FROM \(schema)Corpus)
+                || '/' || (SELECT COUNT(*) FROM \(schema)ExampleTranslation)
+                || '/' || (SELECT IFNULL(SUM(LENGTH(translation)), 0) FROM \(schema)ExampleTranslation);
+        """
+        if sqlite3_prepare_v2(db, query, -1, &stmt, nil) == SQLITE_OK,
+           sqlite3_step(stmt) == SQLITE_ROW,
+           let text = sqlite3_column_text(stmt, 0) {
+            stamp = String(cString: text)
+        }
+        sqlite3_finalize(stmt)
+        return stamp
     }
 
     // MARK: - Learning Schema Migration

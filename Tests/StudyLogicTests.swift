@@ -338,7 +338,31 @@ final class StudyLogicTests: XCTestCase {
         XCTAssertEqual(scalar(legacyURL, "SELECT word FROM Corpus WHERE id = '\(id)';"), "causal")
         XCTAssertEqual(scalar(legacyURL, "SELECT familiar FROM Corpus WHERE id = '\(id)';"), "2")
         XCTAssertEqual(db.fetchProgress(corpusId: id)?.nextReviewAt, "2026-10-03T00:00:00Z")
-        XCTAssertEqual(defaults.integer(forKey: "bundledContentVersion"), 6)
+        XCTAssertEqual(defaults.integer(forKey: "bundledContentVersion"), 8)
+    }
+
+    /// The word list, every example sentence and every translation all shipped
+    /// under content version 7. An install that took the first of those builds
+    /// then skipped the rest, because the version alone said it was up to date,
+    /// and kept showing meaning questions for words whose examples had arrived.
+    func testE_contentChangeUnderTheSameVersionStillReachesInstalls() throws {
+        let legacyURL = tempDir.appendingPathComponent("same-version.db")
+        try FileManager.default.copyItem(at: bundledDB, to: legacyURL)
+        let id = try XCTUnwrap(scalar(legacyURL, "SELECT id FROM Corpus WHERE vocabularyId='unified-teps-vocab-id' AND isDeleted=0 AND exampleSentence <> '' LIMIT 1;"))
+        sql(legacyURL, """
+            UPDATE Corpus SET exampleSentence = 'stale sentence', familiar = 3,
+                              scheduledAt = '2026-11-03T00:00:00Z' WHERE id = '\(id)';
+        """)
+
+        let defaults = UserDefaults(suiteName: "tests-\(UUID().uuidString)")!
+        defaults.set(99, forKey: "bundledContentVersion")   // claims to be up to date
+        defaults.set("0/", forKey: "bundledContentStamp")   // but took different content
+        let db = DatabaseManager(databaseURL: legacyURL, bundledURL: bundledDB, defaults: defaults)
+
+        XCTAssertNotEqual(scalar(legacyURL, "SELECT exampleSentence FROM Corpus WHERE id = '\(id)';"),
+                          "stale sentence", "content syncs even when the version has not moved")
+        XCTAssertEqual(db.fetchProgress(corpusId: id)?.nextReviewAt, "2026-11-03T00:00:00Z",
+                       "and the install keeps its progress")
     }
 
     /// Every example sentence has a Korean translation, and an install on content v4
@@ -351,41 +375,62 @@ final class StudyLogicTests: XCTestCase {
 
         let legacyURL = tempDir.appendingPathComponent("v4.db")
         try FileManager.default.copyItem(at: bundledDB, to: legacyURL)
-        let id = try XCTUnwrap(words.first { $0.word == "uphold" }?.id)
+        // Taken from the shipped corpus rather than named outright: the word list
+        // is replaced when the course books change, and a hardcoded headword then
+        // points at a word the bundle no longer carries.
+        let subject = try XCTUnwrap(words.first { $0.word == "legitimate" })
+        let expected = try XCTUnwrap(translations[subject.id])
         sql(legacyURL, """
             DROP TABLE ExampleTranslation;
-            UPDATE Corpus SET familiar = 3, scheduledAt = '2026-11-03T00:00:00Z' WHERE id = '\(id)';
+            UPDATE Corpus SET familiar = 3, scheduledAt = '2026-11-03T00:00:00Z' WHERE id = '\(subject.id)';
         """)
         let defaults = UserDefaults(suiteName: "tests-\(UUID().uuidString)")!
         defaults.set(4, forKey: "bundledContentVersion")
         let upgraded = DatabaseManager(databaseURL: legacyURL, bundledURL: bundledDB, defaults: defaults)
 
-        XCTAssertEqual(upgraded.fetchExampleTranslations()[id], "법원은 강력한 판례를 근거로 이전 판결을 유지하기로 했다.")
+        XCTAssertEqual(upgraded.fetchExampleTranslations()[subject.id], expected)
         XCTAssertEqual(upgraded.fetchExampleTranslations().count, translations.count)
-        XCTAssertEqual(upgraded.fetchProgress(corpusId: id)?.nextReviewAt, "2026-11-03T00:00:00Z")
-        XCTAssertEqual(defaults.integer(forKey: "bundledContentVersion"), 6)
+        XCTAssertEqual(upgraded.fetchProgress(corpusId: subject.id)?.nextReviewAt, "2026-11-03T00:00:00Z")
+        XCTAssertEqual(defaults.integer(forKey: "bundledContentVersion"), 8)
     }
 
     /// Content v6 cleaned example sentences: no duplicated phrases, correct verb
-    /// forms, and each repaired word now produces exactly one blank.
+    /// forms, and every active word produces exactly one blank.
+    ///
+    /// This sweeps the whole corpus rather than a list of repaired words: the
+    /// word list is replaced wholesale when the course books change, which left
+    /// the old fixed list asserting against words that no longer ship.
     func testD_cleanedExamplesProduceSingleBlanks() throws {
         let db = makeDatabase()
         let words = db.fetchAllActiveWords()
+        XCTAssertGreaterThan(words.count, 100)
+
         let duplicated = words.filter {
             ($0.exampleSentence ?? "").range(of: "\\b((?:[A-Za-z'’]+ ){1,3}[A-Za-z'’]+) \\1\\b",
                                              options: [.regularExpression, .caseInsensitive]) != nil
         }
         XCTAssertEqual(duplicated.map(\.word), [])
 
-        let repaired = ["palm off", "hedge against", "stave off", "back away from", "hedge in", "foist off on",
-                        "impute to", "wrest from", "inundate", "embellish", "relegate", "divulge", "beleaguer",
-                        "fare", "harass", "legitimate", "attain", "erode", "planet", "make way"]
-        for word in repaired {
-            let corpus = try XCTUnwrap(words.first { $0.word == word }, word)
-            let blanked = try XCTUnwrap(ContextBlanker.blanked(word, in: corpus.exampleSentence ?? ""), word)
-            XCTAssertEqual(blanked.components(separatedBy: ContextBlanker.blank).count - 1, 1, "\(word): \(blanked)")
+        // "let bygones be bygones" is the one entry whose idiom repeats the
+        // headword on purpose, so it legitimately blanks twice.
+        let repeatsOnPurpose: Set<String> = ["bygones"]
+        var unblankable: [String] = []
+        var wrongBlankCount: [String] = []
+        for corpus in words {
+            let sentence = corpus.exampleSentence ?? ""
+            guard !sentence.isEmpty,
+                  let blanked = ContextBlanker.blanked(corpus.word, in: sentence) else {
+                unblankable.append(corpus.word)
+                continue
+            }
+            let blanks = blanked.components(separatedBy: ContextBlanker.blank).count - 1
+            let expected = repeatsOnPurpose.contains(corpus.word) ? 2 : 1
+            if blanks != expected {
+                wrongBlankCount.append("\(corpus.word) → \(blanked)")
+            }
         }
-        XCTAssertNil(words.first { $0.word == "make away" })
+        XCTAssertEqual(unblankable, [], "every active word needs an example the app can blank")
+        XCTAssertEqual(wrongBlankCount, [], "a second blank means the sentence repeats the headword")
     }
 
     func testD_contextQuestionHasTranslationAfterAnswer() {
@@ -464,20 +509,38 @@ final class StudyLogicTests: XCTestCase {
         XCTAssertEqual(WordFeatures.declaredPartsOfSpeech("conjunction"), [])
     }
 
-    /// "regardless of" used to get noun phrases (drug overdose, sharp dresser) that
-    /// could never fill an adverbial blank; options must now be adverbial phrases.
+    /// A phrase target used to get noun phrases (drug overdose, sharp dresser)
+    /// that could never fill its blank; options must share both its shape and
+    /// its grammatical role.
+    ///
+    /// The target is taken from the pool instead of being named: which phrases
+    /// ship changes with the course books, and the old fixed target
+    /// ("regardless of") is no longer in the word list. The role with the most
+    /// phrases is used, because contextDistractors drops the part-of-speech
+    /// filter when too few candidates share it — a role with three phrases
+    /// would test the fallback rather than the rule.
     func testD_phraseDistractorsMatchGrammaticalRole() throws {
         let db = makeDatabase()
         let pool = db.fetchAllActiveWords()
         let service = DistractorService(pool: pool)
-        let target = try XCTUnwrap(pool.first { $0.word == "regardless of" })
-        XCTAssertEqual(service.features(for: target).pos, .adverb)
+
+        let byRole = Dictionary(grouping: pool.filter { $0.word.contains(" ") }) {
+            service.features(for: $0).pos
+        }
+        let role = try XCTUnwrap(byRole.max { $0.value.count < $1.value.count }?.key)
+        let sameRole = try XCTUnwrap(byRole[role])
+        XCTAssertGreaterThan(sameRole.count, 10, "not enough phrases to draw options from")
+
+        let target = try XCTUnwrap(sameRole.first {
+            ContextBlanker.blanked($0.word, in: $0.exampleSentence ?? "") != nil
+        })
         let sentence = try XCTUnwrap(ContextBlanker.blanked(target.word, in: target.exampleSentence ?? ""))
+
         for _ in 0..<10 {
             let wrong = service.contextDistractors(for: target, blankedSentence: sentence, count: 3)
             XCTAssertEqual(wrong.count, 3)
             XCTAssertTrue(wrong.allSatisfy { $0.word.contains(" ") }, "phrase options for a phrase target")
-            XCTAssertTrue(wrong.allSatisfy { service.features(for: $0).pos == .adverb }, "\(wrong.map(\.word))")
+            XCTAssertTrue(wrong.allSatisfy { service.features(for: $0).pos == role }, "\(wrong.map(\.word))")
         }
     }
 }
