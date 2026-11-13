@@ -8,15 +8,16 @@
 # 앱은 삭제하지 않고 덮어 설치한다. 학습 진도는 앱 Documents 안에 있다.
 #
 # 사용법:
-#   ./Scripts/refresh_app.sh              # 기기 자동 탐색
+#   ./Scripts/refresh_app.sh --prep       # 프로파일만 정리 → 이어서 Xcode 에서 ⌘R
+#   ./Scripts/refresh_app.sh              # 정리 + 빌드 + 설치까지 한 번에
 #   UDID=00008110-000... ./Scripts/refresh_app.sh
-#   ./Scripts/refresh_app.sh --status     # 빌드 없이 현재 만료일만 확인
+#   ./Scripts/refresh_app.sh --status     # 아무것도 바꾸지 않고 만료일만 확인
 
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 DEVELOPER_DIR="${DEVELOPER_DIR:-/Users/hyg/Desktop/Xcode.app/Contents/Developer}"
-[ -d "$DEVELOPER_DIR" ] || DEVELOPER_DIR="$(xcode-select -p)"
+[ -d "$DEVELOPER_DIR" ] || DEVELOPER_DIR="$(xcode-select -p 2>/dev/null || true)"
 export DEVELOPER_DIR
 
 BUILD_DIR="build/refresh"
@@ -38,7 +39,7 @@ if [ "${1:-}" = "--status" ]; then
     show_expiry "$APP"
     echo
     echo "▸ 서명 인증서"
-    security find-identity -v -p codesigning | sed 's/^/  /'
+    { security find-identity -v -p codesigning || true; } | sed 's/^/  /'
     exit 0
 fi
 
@@ -50,6 +51,16 @@ if [ -d "$PROFILES" ]; then
     echo "  $COUNT 개 삭제 — Xcode 가 새 7일짜리를 발급합니다"
 else
     echo "  캐시 폴더 없음 (건너뜀)"
+fi
+
+if [ "${1:-}" = "--prep" ]; then
+    echo
+    echo "▸ 서명 인증서"
+    { security find-identity -v -p codesigning || true; } | sed 's/^/  /'
+    echo
+    echo "✓ 준비 완료. 이제 Xcode 를 열어 아이폰을 선택하고 ⌘R 로 빌드하세요."
+    echo "  (앱은 삭제하지 마세요 — 학습 진도가 앱 안에 있습니다)"
+    exit 0
 fi
 
 echo "▸ 2/4 연결된 기기 확인"
